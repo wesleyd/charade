@@ -1,0 +1,17 @@
+Charade is an ssh-agent in cygwin that proxies requests to pageant.
+
+If you don't use cygwin or pageant, you don't need charade.
+
+Background: I tolerate Windows XP. I actually quite like it. But it
+needs putty, and it needs cygwin to be usable. I used to maintain
+two separate sets of ssh keys: one for putty, which I kept in pageant,
+and another for cygwin's openssh, which I kept in ssh-agent/keychain.
+
+Eventually I got fed up maintaining two key pairs and charade was born.
+
+It's really just a program that pretends to be ssh-agent on one side
+and pretends to be putty on the other.
+
+How do you run it? Just like ssh-agent.
+
+Wesley Darlington, November 2009.

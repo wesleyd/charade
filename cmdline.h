@@ -13,6 +13,9 @@ extern int g_kill_flag;
 extern int g_debug_flag;
 extern char *g_socket_name;
 
-void parse_cmdline(int *pargc, char ***pargv);
+extern int g_subprocess_argc;
+extern char **g_subprocess_argv;
+
+void parse_cmdline(int argc, char **argv);
 
 #endif  // #ifndef CMDLINE_H

@@ -1,3 +1,7 @@
+/* cmdline.c
+ *
+ * Parse command line arguments for charade.
+ */
 
 #include <stdlib.h>
 #include <string.h>
@@ -26,13 +30,13 @@ usage(void)
 }
 
 void
-parse_cmdline(int *pargc, char ***pargv)
+parse_cmdline(int argc, char **argv)
 {
     int ch;
     extern int optind, opterr;
     extern char *optarg;
 
-    while (-1 != (ch = getopt(*pargc, *pargv, "cskda:"))) {
+    while (-1 != (ch = getopt(argc, argv, "cskda:"))) {
         switch (ch) {
             case 'c': ++g_csh_flag;
                       break;
@@ -47,21 +51,24 @@ parse_cmdline(int *pargc, char ***pargv)
             default: usage();
         }
     }
-    *pargc -= optind;
-    *pargv += optind;
+    argc -= optind;
+    argv += optind;
 
     // If any flags given, there better not be process-to-run-args...
-    if (*pargc > 0 && (g_csh_flag || g_sh_flag || g_kill_flag)) {
+    if (argc > 0 && (g_csh_flag || g_sh_flag || g_kill_flag)) {
         EPRINTF(1, "Can't produce shell commands *and* run subprocess!\n");
         usage();
     }
 
     // If there's no shell and no process-to-run-args, assume C shell...
-    if (*pargc == 0 && !g_csh_flag && !g_sh_flag) {
+    if (argc == 0 && !g_csh_flag && !g_sh_flag) {
         char *shell = getenv("SHELL");
         size_t len;
         if (shell != NULL && (len = strlen(shell)) > 2
                           && strncmp(shell + len - 3, "csh", 3) == 0)
             g_csh_flag = 1;
     }
+
+    g_subprocess_argc = argc;
+    g_subprocess_argv = argv;
 }

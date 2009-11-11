@@ -1,7 +1,5 @@
-CC := gcc
-CFLAGS := -Wall -Werror -O2
-
-export CC CFLAGS
+export CC := gcc
+export CFLAGS := -Wall -Werror -O2
 
 all: charade.exe
 
@@ -12,13 +10,13 @@ OBJFILES := $(CFILES:.c=.o)
 include $(OBJFILES:.o=.d)
 
 %d: %c
-	./depend.sh . $<
+	./depend.sh . $< > $@
 
 install: all
 	install charade.exe /usr/local/bin
 
 charade.exe: $(OBJFILES)
-	$(CC) $(CFLAGS) -o $@ $+
+	$(CC) $(CFLAGS) -Wl,--enable-auto-import -o $@ $+
 
 clean:
 	rm -f charade.exe

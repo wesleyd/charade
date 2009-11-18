@@ -6,6 +6,7 @@
  */
 
 #include <errno.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -167,10 +168,80 @@ fork_subprocess(void)
     }
 }
 
+int
+make_poll_fds(struct pollfd **fds)
+{
+    int nfds = 1;  // TODO: Aye, right!
+    struct pollfd *p = calloc(sizeof(struct pollfd), nfds);
+
+    if (!p) {
+        fprintf(stderr, "Can't calloc struct pollfd's for poll().\n");
+        exit(1);
+    }
+
+    p[0].fd = sock;
+    p[0].events = POLLIN;
+
+    // TODO: Set up all the other sockets
+
+    *fds = p;
+    return nfds;
+}
+
+void
+free_poll_fds(struct pollfd *fds)
+{
+    free(fds);
+}
+
+void
+deal_with_ready_fds(struct pollfd *fds, int nfds)
+{
+    fprintf(stderr, "%s: nfds=%d.\n", __func__, nfds);
+
+    if (nfds != 1) {
+        fprintf(stderr, "failed assertion: expected only one fd.\n");
+        exit(1);
+    }
+
+    struct sockaddr_un sunaddr;
+    socklen_t socksize = sizeof(sunaddr);
+    int newsock = accept(sock, (struct sockaddr *) &sunaddr, &socksize);
+
+    if (-1 == newsock) {
+        perror("accept");
+        exit(1);
+    }
+
+    // TODO: Set newsock to nonblocking!?!
+
+    // TODO: put newsock in a list somewhere; don't just *close* it!!
+    close(newsock);
+}
+
 void
 handle_key_requests_forever(void)
 {
-    // Select on sockets, etc etc
+    struct pollfd *fds;
+    int nfds = make_poll_fds(&fds);
+    int numready = poll(fds, nfds, -1);
+
+    if (numready > 0) {
+        deal_with_ready_fds(fds, nfds);
+    } else if (numready < 0) {
+        if (EINTR == errno) {
+            fprintf(stderr, "Info: poll() => EINTR.\n");
+            return;
+        } else {
+            perror("poll error");
+            exit(1);
+        }
+    } else if (0 == numready) {
+        fprintf(stderr, "Error: poll() returned 0, but no timeout was set.\n");
+        exit(1);
+    }
+
+    free_poll_fds(fds);
 }
 
 int

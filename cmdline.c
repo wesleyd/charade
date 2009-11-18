@@ -16,6 +16,9 @@ int g_kill_flag = 0;
 int g_debug_flag = 0;
 char *g_socket_name = 0;
 
+int g_subprocess_argc;
+char **g_subprocess_argv;
+
 static void
 usage(void)
 {

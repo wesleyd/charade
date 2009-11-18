@@ -6,6 +6,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -24,7 +25,7 @@
 #define SSH_AUTHSOCKET_ENV_NAME "SSH_AUTH_SOCK"
 #define SSH_AGENTPID_ENV_NAME "SSH_AGENT_PID"
 
-int sock;
+int listen_sock;
 
 char socket_dir[MAXPATHLEN] = "";
 char socket_name[MAXPATHLEN] = "";
@@ -99,8 +100,8 @@ create_socket(void)
 #endif
 
 
-    sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sock < 0) {
+    listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (listen_sock < 0) {
         perror("socket");
         exit(1);
     }
@@ -110,7 +111,7 @@ create_socket(void)
     sunaddr.sun_family = AF_UNIX;
     strlcpy(sunaddr.sun_path, socket_name, sizeof(sunaddr.sun_path));
     int prev_mask = umask(0177);
-    if (bind(sock, (struct sockaddr *) &sunaddr, sizeof(sunaddr)) < 0) {
+    if (bind(listen_sock, (struct sockaddr *) &sunaddr, sizeof(sunaddr)) < 0) {
         perror("bind");
         umask(prev_mask);
         exit(1);
@@ -123,7 +124,7 @@ create_socket(void)
     }
 
     umask(prev_mask);
-    if (listen(sock, LISTEN_BACKLOG) < 0) {
+    if (listen(listen_sock, LISTEN_BACKLOG) < 0) {
         perror("listen");
         exit(1);
     }
@@ -179,8 +180,8 @@ make_poll_fds(struct pollfd **fds)
         exit(1);
     }
 
-    p[0].fd = sock;
-    p[0].events = POLLIN;
+    p[0].fd = listen_sock;
+    p[0].events = POLLIN | POLLHUP;
 
     // TODO: Set up all the other sockets
 
@@ -195,6 +196,42 @@ free_poll_fds(struct pollfd *fds)
 }
 
 void
+set_nonblock(int sock)
+{
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0) {
+        fprintf(stderr, "fcntl(%d, F_GETFL, 0): %s.\n", sock, strerror(errno));
+        exit(1);
+    }
+
+    flags |= O_NONBLOCK;
+
+    if (fcntl(sock, F_SETFL, flags) == -1) {
+        fprintf(stderr, "fcntl(%d, F_SETFL, O_NONBLOCK): %s.\n", 
+                sock, strerror(errno));
+        exit(1);
+    }
+}
+
+void
+accept_new_socket(void)
+{
+    struct sockaddr_un sunaddr;
+    socklen_t socksize = sizeof(sunaddr);
+    int newsock = accept(listen_sock, (struct sockaddr *) &sunaddr, &socksize);
+
+    if (-1 == newsock) {
+        perror("accept");
+        exit(1);
+    }
+
+    set_nonblock(newsock);
+
+    // TODO: put newsock in a list somewhere; don't just *close* it!!
+    close(newsock);
+}
+
+void
 deal_with_ready_fds(struct pollfd *fds, int nfds)
 {
     fprintf(stderr, "%s: nfds=%d.\n", __func__, nfds);
@@ -204,19 +241,21 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
         exit(1);
     }
 
-    struct sockaddr_un sunaddr;
-    socklen_t socksize = sizeof(sunaddr);
-    int newsock = accept(sock, (struct sockaddr *) &sunaddr, &socksize);
+    int i;
+    for (i = 0; i < nfds; ++i) {
+        if (!fds[i].revents)
+            continue;
 
-    if (-1 == newsock) {
-        perror("accept");
-        exit(1);
+        // Don't just *assume* that entry 0 is listen_sock...
+        if (listen_sock == fds[i].fd) {
+            accept_new_socket();
+        } else {
+            // Something is happening on one of the *other* sockets...
+            fprintf(stderr, "TODO: activity revent 0x%x on fd %d.\n",
+                    fds[i].revents, fds[i].fd);
+            exit(1);
+        }
     }
-
-    // TODO: Set newsock to nonblocking!?!
-
-    // TODO: put newsock in a list somewhere; don't just *close* it!!
-    close(newsock);
 }
 
 void

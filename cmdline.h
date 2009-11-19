@@ -10,7 +10,7 @@
 extern int g_csh_flag;
 extern int g_sh_flag;
 extern int g_kill_flag;
-extern int g_debug_flag;
+extern int g_dontfork_flag;
 extern char *g_socket_name;
 
 extern int g_subprocess_argc;

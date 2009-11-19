@@ -13,7 +13,7 @@
 int g_csh_flag = 0;
 int g_sh_flag = 0;
 int g_kill_flag = 0;
-int g_debug_flag = 0;
+int g_dontfork_flag = 0;
 char *g_socket_name = 0;
 
 int g_subprocess_argc;
@@ -27,7 +27,8 @@ usage(void)
     EPRINTF(0, "  -c          Generate C-shell commands on stdout.\n");
     EPRINTF(0, "  -s          Generate Bourne shell commands on stdout.\n");
     EPRINTF(0, "  -k          Kill the current agent.\n");
-    EPRINTF(0, "  -d          Debug mode.\n");
+    EPRINTF(0, "  -d          Don't fork.\n");
+    EPRINTF(0, "  -v [-v ...] More trace output.\n");
     EPRINTF(0, "  -a socket   Bind agent socket to given name.\n");
     exit(1);
 }
@@ -39,7 +40,7 @@ parse_cmdline(int argc, char **argv)
     extern int optind, opterr;
     extern char *optarg;
 
-    while (-1 != (ch = getopt(argc, argv, "cskda:"))) {
+    while (-1 != (ch = getopt(argc, argv, "cskdva:"))) {
         switch (ch) {
             case 'c': ++g_csh_flag;
                       break;
@@ -47,7 +48,9 @@ parse_cmdline(int argc, char **argv)
                       break;
             case 'k': ++g_kill_flag;
                       break;
-            case 'd': louder();
+            case 'd': g_dontfork_flag = 1;
+                      break;
+            case 'v': louder();
                       break;
             case 'a': g_socket_name = optarg;
                       break;

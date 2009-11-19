@@ -204,28 +204,36 @@ kill_old_agent(void)
 void
 fork_subprocess(void)
 {
-    int pid = fork();
+    if (! g_dontfork_flag) {
+        long pid = fork();
 
-    if (-1 == pid) {
-        perror("fork");
-        exit(1);
-    }
+        if (-1 == pid) {
+            perror("fork");
+            exit(1);
+        }
 
-    if (pid) {  // Parent
+        if (pid) {  // Parent
+            printf("%s=%s; export %s\n", SSH_AUTHSOCKET_ENV_NAME, socket_name,
+                                       SSH_AUTHSOCKET_ENV_NAME);
+            printf("%s=%ld; export %s\n", SSH_AGENTPID_ENV_NAME, (long) pid,
+                                       SSH_AGENTPID_ENV_NAME);
+
+            // TODO: If argv present, fork and exec it. Only do above if no args.
+
+            remove_socket_at_exit = 0;
+            exit(0);
+        }
+        // Child
+        if (setsid() == -1) {
+            perror("setsid");
+        }
+    } else {
+        int pid = getpid();
+
         printf("%s=%s; export %s\n", SSH_AUTHSOCKET_ENV_NAME, socket_name,
                                    SSH_AUTHSOCKET_ENV_NAME);
         printf("%s=%ld; export %s\n", SSH_AGENTPID_ENV_NAME, (long) pid,
                                    SSH_AGENTPID_ENV_NAME);
-
-        // TODO: If argv present, fork and exec it. Only do above if no args.
-
-        remove_socket_at_exit = 0;
-        exit(0);
-    }
-
-    // Child
-    if (setsid() == -1) {
-        perror("setsid");
     }
 }
 
@@ -306,6 +314,24 @@ accept_new_socket(void)
 }
 
 void
+fd_is_closed(int fd)
+{
+    // Remove it from the list...
+
+    // TODO: Remove the fd from the big list!
+    struct socklist_node_t *p;
+    for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
+        if (p->fd == fd) {
+            TAILQ_REMOVE(&socklist, p, next);
+            break;
+        }
+    }
+
+    // ...and close it I guess...
+    close(fd);
+}
+
+void
 deal_with_ready_fds(struct pollfd *fds, int nfds)
 {
     fprintf(stderr, "%s: nfds=%d.\n", __func__, nfds);
@@ -326,8 +352,7 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
             ssize_t numbytes = read(fds[i].fd, buf, count);
 
             if (0 == numbytes) {
-                fprintf(stderr, "TODO: fd %d closed.\n", fds[i].fd);
-                exit(1);
+                fd_is_closed(fds[i].fd);
             } else if (-1 == numbytes) {
                 fprintf(stderr, "TODO: fd %d error, errno is %s.\n", fds[i].fd, strerror(errno));
                 exit(1);
@@ -419,23 +444,16 @@ main(int argc, char **argv)
     /* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
     // TODO: sanitise_stdfd();
 
-#if 0
     parse_cmdline(argc, argv);
 
     if (g_kill_flag) {
         kill_old_agent();
         exit(0);
     }
-#endif
 
     init_socket_list();
 
     create_socket();
-
-#if 0
-    if (! g_debug_flag) {
-    }
-#endif
 
     fork_subprocess();
 

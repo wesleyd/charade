@@ -302,9 +302,9 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
         if (listen_sock == fds[i].fd) {
             accept_new_socket();
         } else {
-            // Something is happening on one of the *other* sockets...
-            fprintf(stderr, "TODO: activity revent 0x%x on fd %d.\n",
-                    fds[i].revents, fds[i].fd);
+            // Deal with data from fds[i].fd...
+            //byte buf[BUFSIZ];
+            fprintf(stderr, "TODO: Deal with data from fd\n");
             exit(1);
         }
     }

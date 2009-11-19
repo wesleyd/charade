@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
+#include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -25,12 +26,54 @@
 #define SSH_AUTHSOCKET_ENV_NAME "SSH_AUTH_SOCK"
 #define SSH_AGENTPID_ENV_NAME "SSH_AGENT_PID"
 
+typedef unsigned char byte;
+
 int listen_sock;
+struct socklist_node_t {
+    TAILQ_ENTRY(socklist_node_t) next;
+    int fd;
+    byte *data;
+};
+TAILQ_HEAD(socklist_queue, socklist_node_t) socklist;
 
 char socket_dir[MAXPATHLEN] = "";
 char socket_name[MAXPATHLEN] = "";
 
 int remove_socket_at_exit = 1;
+
+void
+init_socket_list(void)
+{
+    TAILQ_INIT(&socklist);
+}
+
+void
+add_socket_to_socket_list(int sock)
+{
+    struct socklist_node_t *p = calloc(sizeof(struct socklist_node_t), 1);
+
+    p->fd = sock;
+    p->data = NULL;
+
+    fprintf(stderr, "Adding socket %d to socket list.\n", sock);
+
+    TAILQ_INSERT_TAIL(&socklist, p, next);
+}
+
+int
+num_sockets_in_list(void)
+{
+    struct socklist_node_t *p;
+    int count = 0;
+
+    for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
+        ++count;
+    }
+
+    fprintf(stderr, "Log: there are %d sockets in the list.\n", count);
+
+    return count;
+}
 
 void
 remove_socket_dir(void)  /* atexit handler */
@@ -172,20 +215,35 @@ fork_subprocess(void)
 int
 make_poll_fds(struct pollfd **fds)
 {
-    int nfds = 1;  // TODO: Aye, right!
-    struct pollfd *p = calloc(sizeof(struct pollfd), nfds);
+    int nfds = 1                       // The listening socket...
+             + num_sockets_in_list();  // ...plus all the others.
 
-    if (!p) {
+    struct pollfd *pollfds = calloc(sizeof(struct pollfd), nfds);
+
+    if (!pollfds) {
         fprintf(stderr, "Can't calloc struct pollfd's for poll().\n");
         exit(1);
     }
 
-    p[0].fd = listen_sock;
-    p[0].events = POLLIN | POLLHUP;
+    pollfds[0].fd = listen_sock;
+    pollfds[0].events = POLLIN | POLLHUP;
 
-    // TODO: Set up all the other sockets
+    struct socklist_node_t *p;
+    int i = 1;
+    for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
 
-    *fds = p;
+        if (i >= nfds) {
+            fprintf(stderr, "Fatal: socket list changed underneath us.\n");
+            exit(1);
+        }
+
+        // TODO: Do we want POLLOUT and the close notifications too???
+
+        pollfds[i].events = POLLIN | POLLHUP;
+        pollfds[i].fd = p->fd;
+    }
+
+    *fds = pollfds;
     return nfds;
 }
 
@@ -227,19 +285,13 @@ accept_new_socket(void)
 
     set_nonblock(newsock);
 
-    // TODO: put newsock in a list somewhere; don't just *close* it!!
-    close(newsock);
+    add_socket_to_socket_list(newsock);
 }
 
 void
 deal_with_ready_fds(struct pollfd *fds, int nfds)
 {
     fprintf(stderr, "%s: nfds=%d.\n", __func__, nfds);
-
-    if (nfds != 1) {
-        fprintf(stderr, "failed assertion: expected only one fd.\n");
-        exit(1);
-    }
 
     int i;
     for (i = 0; i < nfds; ++i) {
@@ -261,26 +313,29 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
 void
 handle_key_requests_forever(void)
 {
-    struct pollfd *fds;
-    int nfds = make_poll_fds(&fds);
-    int numready = poll(fds, nfds, -1);
+    for (;;) {
+        struct pollfd *fds;
+        int nfds = make_poll_fds(&fds);
+        int numready = poll(fds, nfds, -1);
+        fprintf(stderr, "Poll said %d ready.\n", numready);
 
-    if (numready > 0) {
-        deal_with_ready_fds(fds, nfds);
-    } else if (numready < 0) {
-        if (EINTR == errno) {
-            fprintf(stderr, "Info: poll() => EINTR.\n");
-            return;
-        } else {
-            perror("poll error");
+        if (numready > 0) {
+            deal_with_ready_fds(fds, nfds);
+        } else if (numready < 0) {
+            if (EINTR == errno) {
+                fprintf(stderr, "Info: poll() => EINTR.\n");
+                return;
+            } else {
+                perror("poll error");
+                exit(1);
+            }
+        } else if (0 == numready) {
+            fprintf(stderr, "Error: poll() => 0, but no timeout was set.\n");
             exit(1);
         }
-    } else if (0 == numready) {
-        fprintf(stderr, "Error: poll() returned 0, but no timeout was set.\n");
-        exit(1);
-    }
 
-    free_poll_fds(fds);
+        free_poll_fds(fds);
+    }
 }
 
 int
@@ -297,6 +352,8 @@ main(int argc, char **argv)
         exit(0);
     }
 #endif
+
+    init_socket_list();
 
     create_socket();
 

@@ -18,13 +18,30 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <windows.h>
 
 #include "cmdline.h"
 
 #define LISTEN_BACKLOG 5
+#define BUFSIZE 8192
+#define AGENT_MAX_MSGLEN 8192
+
+// TODO: is there actually something magical about this number?
+#define AGENT_COPYDATA_ID 0x804e50ba 
 
 #define SSH_AUTHSOCKET_ENV_NAME "SSH_AUTH_SOCK"
 #define SSH_AGENTPID_ENV_NAME "SSH_AGENT_PID"
+
+
+#define GET_32BIT_MSB_FIRST(cp) \
+    (((unsigned long)(unsigned char)(cp)[0] << 24) | \
+    ((unsigned long)(unsigned char)(cp)[1] << 16) | \
+    ((unsigned long)(unsigned char)(cp)[2] << 8) | \
+    ((unsigned long)(unsigned char)(cp)[3]))
+
+#define GET_32BIT(cp) GET_32BIT_MSB_FIRST(cp)
+
+
 
 typedef unsigned char byte;
 
@@ -303,9 +320,67 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
             accept_new_socket();
         } else {
             // Deal with data from fds[i].fd...
-            //byte buf[BUFSIZ];
-            fprintf(stderr, "TODO: Deal with data from fd\n");
-            exit(1);
+            const size_t count = BUFSIZE;
+            byte buf[BUFSIZE];
+
+            ssize_t numbytes = read(fds[i].fd, buf, count);
+
+            if (0 == numbytes) {
+                fprintf(stderr, "TODO: fd %d closed.\n", fds[i].fd);
+                exit(1);
+            } else if (-1 == numbytes) {
+                fprintf(stderr, "TODO: fd %d error, errno is %s.\n", fds[i].fd, strerror(errno));
+                exit(1);
+            } else {
+                // Now, let's just *assume* that it'll arrive in one big
+                // chunk and just *send* it to pageant...
+                HWND hwnd;
+                hwnd = FindWindow("Pageant", "Pageant");
+                if (!hwnd) {
+                    fprintf(stderr, "Error: couldn't find pageant window.\n");
+                    exit(1);
+                }
+                char mapname[512];
+                // TODO: FFS don't use sprintf!!!!!
+                sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
+                HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
+                                            0, AGENT_MAX_MSGLEN, mapname);
+                if (filemap == NULL || filemap == INVALID_HANDLE_VALUE) {
+                    fprintf(stderr, "TODO: What do we do here? I have no idea yet.\n");
+                    exit(1);
+                }
+                byte *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
+                memcpy(p, buf, numbytes);
+                COPYDATASTRUCT cds;
+                cds.dwData = AGENT_COPYDATA_ID;
+                cds.cbData = 1 + strlen(mapname);
+                cds.lpData = mapname;
+
+                int id = SendMessage(hwnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM) &cds);
+                int retlen = 0;
+                if (id > 0) {
+                    retlen = 4 + GET_32BIT(p);
+                    if (retlen > sizeof(buf)) {
+                        fprintf(stderr, "Nearly a buffer overflow, oh yeah! Quitting.\n");
+                        exit(1);
+                    }
+                    memcpy(buf, p, retlen);
+                } else {
+                    fprintf(stderr, "TODO: Couldn't SendMessage. Quitting.\n");
+                    exit(1);
+                }
+                UnmapViewOfFile(p);
+                CloseHandle(filemap);
+
+                // Now, send buf back to the socket. We should probably loop and retry
+                // or use poll properly since it's nonblocking...
+                ssize_t byteswritten = write(fds[i].fd, buf, retlen);
+                if (byteswritten != retlen) {
+                    fprintf(stderr, "Tried to write %d bytes, ended up writing %d. Quitting.\n",
+                            retlen, byteswritten);
+                    exit(1);
+                }
+            }
         }
     }
 }

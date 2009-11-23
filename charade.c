@@ -21,6 +21,7 @@
 #include <windows.h>
 
 #include "cmdline.h"
+#include "eprintf.h"
 
 #define LISTEN_BACKLOG 5
 #define BUFSIZE 8192
@@ -53,7 +54,7 @@ TAILQ_HEAD(socklist_queue, socklist_node_t) socklist;
 char socket_dir[MAXPATHLEN] = "";
 char socket_name[MAXPATHLEN] = "";
 
-int remove_socket_at_exit = 1;
+int remove_socket_at_exit = 0;
 
 void
 init_socket_list(void)
@@ -69,7 +70,7 @@ add_socket_to_socket_list(int sock)
     p->fd = sock;
     p->data = NULL;
 
-    fprintf(stderr, "Adding socket %d to socket list.\n", sock);
+    EPRINTF(5, "adding socket %d to socket list.\n", sock);
 
     TAILQ_INSERT_TAIL(&socklist, p, next);
 }
@@ -84,7 +85,7 @@ num_sockets_in_list(void)
         ++count;
     }
 
-    fprintf(stderr, "Log: there are %d sockets in the list.\n", count);
+    EPRINTF(5, "num sockets in list: %d.\n", count);
 
     return count;
 }
@@ -96,7 +97,7 @@ remove_socket_dir(void)  /* atexit handler */
         int ret = rmdir(socket_dir);
 
         if (ret) {
-            fprintf(stderr, "Error removing socket directory '%s': %s.\n",
+            EPRINTF(0, "error removing socket dir '%s': %s.\n", 
                     socket_dir, strerror(errno));
             /* atexit! */
         }
@@ -110,7 +111,7 @@ remove_socket(void)  /* atexit handler */
         int ret = unlink(socket_name);
 
         if (ret) {
-            fprintf(stderr, "Error removing socket '%s': %s.\n",
+            EPRINTF(0, "error removing socket '%s': %s.\n", 
                     socket_name, strerror(errno));
             /* atexit! */
         }
@@ -125,18 +126,21 @@ create_socket(void)
     if (agentsocket == NULL) {
 #endif
 
-    /* Create private directory for agent socket */
-    strlcpy(socket_dir, "/tmp/ssh-XXXXXXXXXX", sizeof socket_dir);
-    if (mkdtemp(socket_dir) == NULL) {
-        perror("mkdtemp: private socket dir");
+    if (atexit(remove_socket_dir)) {
+        EPRINTF(0, "Can't install atexit handler to delete socket dir.\n");
         exit(1);
     }
 
-    if (atexit(remove_socket_dir)) {
-        fprintf(stderr, "Can't install atexit handler to delete socket '%s'. "
-                        "Do it yourself!\n", socket_name);
+    /* Create private directory for agent socket */
+    strlcpy(socket_dir, "/tmp/ssh-XXXXXXXXXX", sizeof socket_dir);
+    if (mkdtemp(socket_dir) == NULL) {
+        EPRINTF(0, "Can't mkdir private socket directory: %s\n", 
+                strerror(errno));
+        //perror("mkdtemp: private socket dir");
         exit(1);
     }
+
+    remove_socket_at_exit = 1;
 
     int ret = snprintf(socket_name, sizeof(socket_name), 
                        "%s/agent.%ld", socket_dir, (long)getpid());
@@ -190,8 +194,31 @@ create_socket(void)
 void
 kill_old_agent(void)
 {
-    fprintf(stderr, "TODO: kill_old_agent().\n");
-    exit(1);
+    char *pidstr = getenv(SSH_AGENTPID_ENV_NAME);
+    if (pidstr == NULL) {
+        EPRINTF(0, "%s not set, can't kill agent.\n", SSH_AGENTPID_ENV_NAME);
+        exit(1);
+    }
+
+    const char *errstr = NULL;
+    pid_t pid = strtol(pidstr, NULL, 10);  // base 10
+    if (errstr) {
+        EPRINTF(0, "Invalid PID %s=\"%s\".\n", SSH_AGENTPID_ENV_NAME, pidstr);
+        exit(1);
+    }
+
+    if (kill(pid, SIGTERM) == -1) {
+        EPRINTF(0, "error from kill -TERM %ld: %s.\n", (long) pid, strerror(errno));
+        exit(1);
+    }
+
+    const char *format = g_csh_flag 
+                       ? "unsetenv %s;\n"
+                       : "unset %s;\n";
+    printf(format, SSH_AUTHSOCKET_ENV_NAME);
+    printf(format, SSH_AGENTPID_ENV_NAME);
+    printf("echo Agent pid %ld killed;\n", (long)pid);
+    exit(0);
 }
 
 void
@@ -353,26 +380,30 @@ fd_is_closed(int fd)
     close(fd);
 }
 
+// buf is used for input and output, which is why we have
+// a bufsize *and* a numbytes.
 int
-send_request_to_pageant(byte *buf, int numbytes, int buflen)
+send_request_to_pageant(byte *buf, int numbytes, int bufsize)
 {
     // Now, let's just *assume* that it'll arrive in one big
     // chunk and just *send* it to pageant...
     HWND hwnd;
     hwnd = FindWindow("Pageant", "Pageant");
     if (!hwnd) {
-        fprintf(stderr, "Error: couldn't find pageant window.\n");
-        exit(1);
+        EPRINTF(1, "Can't FindWindow(\"Pageant\"...) - "
+                   "is pageant running?.\n");
+        return 0;
     }
+
     char mapname[512];
-    // TODO: FFS don't use sprintf!!!!!
     sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
+
     HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, 
                                        PAGE_READWRITE, 0, 
                                        AGENT_MAX_MSGLEN, mapname);
     if (filemap == NULL || filemap == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "TODO: What do we do here? I have no idea yet.\n");
-        exit(1);
+        EPRINTF(0, "Can't CreateFileMapping.\n");
+        return 0;
     }
 
     byte *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
@@ -386,15 +417,17 @@ send_request_to_pageant(byte *buf, int numbytes, int buflen)
     int retlen = 0;
     if (id > 0) {
         retlen = 4 + GET_32BIT(p);
-        if (retlen > buflen) {
-            fprintf(stderr, "Nearly buffer overflow (%ld > %ld)! Quitting.\n",
-                    (long) retlen, (long) buflen);
-            exit(1);
+        if (retlen > bufsize) {
+            EPRINTF(0, "Buffer too small to contain reply from pageant.\n");
+            return 0;
         }
+
+        // TODO: are there miscounting errors here?
+
         memcpy(buf, p, retlen);
     } else {
-        fprintf(stderr, "TODO: Couldn't SendMessage. Quitting.\n");
-        exit(1);
+        EPRINTF(0, "Couldn't SendMessage().\n");
+        return 0;
     }
     UnmapViewOfFile(p);
     CloseHandle(filemap);
@@ -402,11 +435,10 @@ send_request_to_pageant(byte *buf, int numbytes, int buflen)
     return retlen;
 }
  
-
 void
 deal_with_ready_fds(struct pollfd *fds, int nfds)
 {
-    fprintf(stderr, "%s: nfds=%d.\n", __func__, nfds);
+    EPRINTF(3, "nfds=%d.\n", nfds);
 
     int i;
     for (i = 0; i < nfds; ++i) {
@@ -430,6 +462,7 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 exit(1);
             } else {
                 int retlen = send_request_to_pageant(buf, numbytes, sizeof(buf));
+
                 // Now, send buf back to the socket. We should probably 
                 // loop and retry or use poll properly since it's nonblocking...
                 ssize_t byteswritten = write(fds[i].fd, buf, retlen);
@@ -451,14 +484,14 @@ handle_key_requests_forever(void)
         struct pollfd *fds;
         int nfds = make_poll_fds(&fds);
         int numready = poll(fds, nfds, -1);
-        fprintf(stderr, "Poll said %d ready.\n", numready);
+        EPRINTF(3, "poll() returned %d ready.\n", numready);
 
         if (numready > 0) {
             deal_with_ready_fds(fds, nfds);
         } else if (numready < 0) {
             if (EINTR == errno) {
-                fprintf(stderr, "Info: poll() => EINTR.\n");
-                return;
+                EPRINTF(3, "poll() was EINTR-ed.\n");
+                continue;
             } else {
                 perror("poll error");
                 exit(1);

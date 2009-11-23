@@ -8,13 +8,20 @@
 
 #include "eprintf.h"
 
-unsigned int g_volume = 1;
+static int g_volume = 0;
 
 void
 louder(void)
 {
     ++g_volume;
 }
+
+int
+get_loudness(void)
+{
+    return g_volume;
+}
+
 
 int
 eprintf(int level, const char *fmt, ...)

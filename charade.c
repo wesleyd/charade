@@ -473,6 +473,44 @@ handle_key_requests_forever(void)
     }
 }
 
+void
+redirect(FILE *f, char *basename)
+{
+    char buf[MAXPATHLEN] = "";
+
+    int ret = snprintf(buf, sizeof(buf), "%s/%s.%ld", 
+                       socket_dir, basename, (long)getpid());
+    if (ret >= sizeof(buf)) {
+        EPRINTF(0, "Can't open %s to redirect %s: Too long (%d >= %d).\n", 
+                buf, basename, ret, sizeof(buf));
+    } else {
+        EPRINTF(1, "Redirecting %s to %s.\n", basename, buf);
+
+        if (!freopen(buf, "w", f)) {
+            EPRINTF(0, "can't freopen %s.\n", basename);
+        }
+
+        // Turn off buffering...
+        setvbuf(f, NULL, _IONBF, 0);
+
+        EPRINTF(1, "Redirected %s to %s.\n", basename, buf);
+    }
+}
+
+void
+redirect_stdall(void)
+{
+    fclose(stdin);
+
+    if (get_loudness() <= 0) {
+        fclose(stdout);
+        fclose(stderr);
+    } else {
+        redirect(stdout, "stdout");
+        redirect(stderr, "stderr");
+    }
+}
+
 pid_t
 fork_off_key_handler(void)
 {
@@ -486,27 +524,16 @@ fork_off_key_handler(void)
         return handler_pid;
     }
 
-    fprintf(stderr, "In the child process\n");
-    fflush(stdout);
-
     // OK, we're the child agent process now...
 
-    int newfd = creat("/tmp/loggy2", O_CREAT);
-    dup2(2, newfd);
-    close(newfd);
+    // Make this controllable by cmdline, do it only with -v
+    redirect_stdall();
 
-    /*
-    fprintf(f, "Hello.\n");
-    fflush(f);
-    */
-
-    // TODO: Do the setsid thing
-    /*
+    // Do the setsid thing
     if (setsid() == -1) {
         EPRINTF(0, "error from setsid(): %s.\n", strerror(errno));
         exit(1);
     }
-    */
 
     chdir("/");
 

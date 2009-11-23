@@ -9,16 +9,14 @@
 extern "C" {
 #endif  // #ifdef __cplusplus
 
-extern unsigned int g_volume;
-
 #define EPRINTF(Level, Format, Args...) \
     eprintf(Level, "%s: " Format, __func__, ##Args)
 
 int eprintf(int level, const char *fmt, ...)
         __attribute__ ((format (printf, 2, 3)));
 
-// Increase the verbosity...
 void louder(void);
+int get_loudness(void);
 
 #ifdef __cplusplus
 }

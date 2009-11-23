@@ -22,6 +22,7 @@
 
 #include "cmdline.h"
 #include "eprintf.h"
+#include "todo.h"
 
 #define LISTEN_BACKLOG 5
 #define BUFSIZE 8192
@@ -122,10 +123,6 @@ remove_socket(void)  /* atexit handler */
 void
 create_socket(void)
 {
-#if 0
-    if (agentsocket == NULL) {
-#endif
-
     if (atexit(remove_socket_dir)) {
         EPRINTF(0, "Can't install atexit handler to delete socket dir.\n");
         exit(1);
@@ -134,9 +131,8 @@ create_socket(void)
     /* Create private directory for agent socket */
     strlcpy(socket_dir, "/tmp/ssh-XXXXXXXXXX", sizeof socket_dir);
     if (mkdtemp(socket_dir) == NULL) {
-        EPRINTF(0, "Can't mkdir private socket directory: %s\n", 
+        EPRINTF(0, "Can't mkdir socket directory: %s\n", 
                 strerror(errno));
-        //perror("mkdtemp: private socket dir");
         exit(1);
     }
 
@@ -146,24 +142,14 @@ create_socket(void)
                        "%s/agent.%ld", socket_dir, (long)getpid());
     if (ret >= sizeof(socket_name)) {
         // Would have liked to print more...
-        fprintf(stderr, "socket_name too long (%d >= %d).\n",
+        EPRINTF(0, "socket_name too long (%d >= %d).\n", 
                 ret, sizeof(socket_name));
         exit(1);
     }
 
-
-#if 0
-    } else {
-        /* Try to use specified agent socket */
-        socket_dir[0] = '\0';
-        strlcpy(socket_name, agentsocket, sizeof socket_name);
-    }
-#endif
-
-
     listen_sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (listen_sock < 0) {
-        perror("socket");
+        EPRINTF(0, "socket error: %s.\n", strerror(errno));
         exit(1);
     }
 
@@ -173,20 +159,20 @@ create_socket(void)
     strlcpy(sunaddr.sun_path, socket_name, sizeof(sunaddr.sun_path));
     int prev_mask = umask(0177);
     if (bind(listen_sock, (struct sockaddr *) &sunaddr, sizeof(sunaddr)) < 0) {
-        perror("bind");
+        EPRINTF(0, "bind() error: %s.\n", strerror(errno));
         umask(prev_mask);
         exit(1);
     }
 
     if (atexit(remove_socket)) {
-        fprintf(stderr, "Can't install atexit handler to delete socket '%s'. "
-                        "Do it yourself!\n", socket_name);
+        EPRINTF(0, "Can't install atexit handler to delete socket '%s'; "
+                        "do it yourself!\n", socket_name);
         exit(1);
     }
 
     umask(prev_mask);
     if (listen(listen_sock, LISTEN_BACKLOG) < 0) {
-        perror("listen");
+        EPRINTF(0, "listen() error: %s", strerror(errno));
         exit(1);
     }
 }
@@ -250,42 +236,6 @@ print_env_stuff(int pid)
     print_env_var(SSH_AGENTPID_ENV_NAME, itoa_unsafe(pid));
 }
 
-void
-fork_subprocess(void)
-{
-    if (! g_dontfork_flag) {
-        long pid = fork();
-
-        if (-1 == pid) {
-            perror("fork");
-            exit(1);
-        }
-
-        if (pid) {  // Parent
-            printf("%s=%s; export %s\n", SSH_AUTHSOCKET_ENV_NAME, socket_name,
-                                       SSH_AUTHSOCKET_ENV_NAME);
-            printf("%s=%ld; export %s\n", SSH_AGENTPID_ENV_NAME, (long) pid,
-                                       SSH_AGENTPID_ENV_NAME);
-
-            // TODO: If argv present, fork and exec it. Only do above if no args.
-
-            remove_socket_at_exit = 0;
-            exit(0);
-        }
-        // Child
-        if (setsid() == -1) {
-            perror("setsid");
-        }
-    } else {
-        int pid = getpid();
-
-        printf("%s=%s; export %s\n", SSH_AUTHSOCKET_ENV_NAME, socket_name,
-                                   SSH_AUTHSOCKET_ENV_NAME);
-        printf("%s=%ld; export %s\n", SSH_AGENTPID_ENV_NAME, (long) pid,
-                                   SSH_AGENTPID_ENV_NAME);
-    }
-}
-
 int
 make_poll_fds(struct pollfd **fds)
 {
@@ -295,7 +245,7 @@ make_poll_fds(struct pollfd **fds)
     struct pollfd *pollfds = calloc(sizeof(struct pollfd), nfds);
 
     if (!pollfds) {
-        fprintf(stderr, "Can't calloc struct pollfd's for poll().\n");
+        EPRINTF(0, "Can't calloc() %d struct pollfd's for poll().\n", nfds);
         exit(1);
     }
 
@@ -307,7 +257,7 @@ make_poll_fds(struct pollfd **fds)
     for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
 
         if (i >= nfds) {
-            fprintf(stderr, "Fatal: socket list changed underneath us.\n");
+            EPRINTF(0, "Internal error: socket list changed beneath us.\n");
             exit(1);
         }
 
@@ -315,6 +265,7 @@ make_poll_fds(struct pollfd **fds)
 
         pollfds[i].events = POLLIN | POLLHUP;
         pollfds[i].fd = p->fd;
+        ++i;
     }
 
     *fds = pollfds;
@@ -332,15 +283,14 @@ set_nonblock(int sock)
 {
     int flags = fcntl(sock, F_GETFL, 0);
     if (flags < 0) {
-        fprintf(stderr, "fcntl(%d, F_GETFL, 0): %s.\n", sock, strerror(errno));
+        EPRINTF(0, "Can't fcntl(%d, F_GETFL, 0): %s.\n", sock, strerror(errno));
         exit(1);
     }
 
     flags |= O_NONBLOCK;
 
     if (fcntl(sock, F_SETFL, flags) == -1) {
-        fprintf(stderr, "fcntl(%d, F_SETFL, O_NONBLOCK): %s.\n", 
-                sock, strerror(errno));
+        EPRINTF(0, "fcntl(%d, F_SETFL, O_NONBLOCK): %s.\n", sock, strerror(errno));
         exit(1);
     }
 }
@@ -353,7 +303,7 @@ accept_new_socket(void)
     int newsock = accept(listen_sock, (struct sockaddr *) &sunaddr, &socksize);
 
     if (-1 == newsock) {
-        perror("accept");
+        EPRINTF(0, "accept error: %s", strerror(errno));
         exit(1);
     }
 
@@ -365,9 +315,10 @@ accept_new_socket(void)
 void
 fd_is_closed(int fd)
 {
+    EPRINTF(3, "Removing fd %d from list.\n", fd);
     // Remove it from the list...
 
-    // TODO: Remove the fd from the big list!
+    // Remove the fd from the list...
     struct socklist_node_t *p;
     for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
         if (p->fd == fd) {
@@ -385,6 +336,8 @@ fd_is_closed(int fd)
 int
 send_request_to_pageant(byte *buf, int numbytes, int bufsize)
 {
+    EPRINTF(3, "Sending %d bytes to pageant.\n", numbytes);
+
     // Now, let's just *assume* that it'll arrive in one big
     // chunk and just *send* it to pageant...
     HWND hwnd;
@@ -406,8 +359,8 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
         return 0;
     }
 
-    byte *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
-    memcpy(p, buf, numbytes);
+    byte *shmem = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
+    memcpy(shmem, buf, numbytes);
     COPYDATASTRUCT cds;
     cds.dwData = AGENT_COPYDATA_ID;
     cds.cbData = 1 + strlen(mapname);
@@ -416,21 +369,22 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
     int id = SendMessage(hwnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM) &cds);
     int retlen = 0;
     if (id > 0) {
-        retlen = 4 + GET_32BIT(p);
+        retlen = 4 + GET_32BIT(shmem);
         if (retlen > bufsize) {
             EPRINTF(0, "Buffer too small to contain reply from pageant.\n");
             return 0;
         }
 
-        // TODO: are there miscounting errors here?
-
-        memcpy(buf, p, retlen);
+        memcpy(buf, shmem, retlen);
     } else {
         EPRINTF(0, "Couldn't SendMessage().\n");
         return 0;
     }
-    UnmapViewOfFile(p);
+
+    UnmapViewOfFile(shmem);
     CloseHandle(filemap);
+
+    EPRINTF(3, "Got %d bytes back from pageant.\n", retlen);
 
     return retlen;
 }
@@ -448,7 +402,7 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
         // Don't just *assume* that entry 0 is listen_sock...
         if (listen_sock == fds[i].fd) {
             accept_new_socket();
-        } else {
+        } else if (fds[i].revents & POLLIN) {
             // Deal with data from fds[i].fd...
             const size_t count = BUFSIZE;
             byte buf[BUFSIZE];
@@ -456,10 +410,14 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
             ssize_t numbytes = read(fds[i].fd, buf, count);
 
             if (0 == numbytes) {
+                close(fds[i].fd);
                 fd_is_closed(fds[i].fd);
             } else if (-1 == numbytes) {
-                fprintf(stderr, "TODO: fd %d error, errno is %s.\n", fds[i].fd, strerror(errno));
-                exit(1);
+                // TODO: Should we handle EAGAIN/EWOULDBLOCK specially?
+                EPRINTF(0, "internal error: read(fd=%d) => errno=%d/%s.\n", 
+                        fds[i].fd, errno, strerror(errno));
+                close(fds[i].fd);
+                fd_is_closed(fds[i].fd);
             } else {
                 int retlen = send_request_to_pageant(buf, numbytes, sizeof(buf));
 
@@ -467,12 +425,18 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 // loop and retry or use poll properly since it's nonblocking...
                 ssize_t byteswritten = write(fds[i].fd, buf, retlen);
                 if (byteswritten != retlen) {
-                    fprintf(stderr, "Tried to write %d bytes, "
-                                    "ended up writing %d. Quitting.\n",
+                    EPRINTF(0, "Tried to write %d bytes, "
+                               "ended up writing %d.\n",
                             retlen, byteswritten);
-                    exit(1);
+                    close(fds[i].fd);
+                    fd_is_closed(fds[i].fd);
                 }
-          }
+            }
+        } else {
+            EPRINTF(0, "Don't know how to deal with revents=0x%x on fd %d.\n",
+                    fds[i].revents, fds[i].fd);
+            close(fds[i].fd);
+            fd_is_closed(fds[i].fd);
         }
     }
 }
@@ -480,6 +444,8 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
 void
 handle_key_requests_forever(void)
 {
+    EPRINTF(5, "entry.\n");
+
     for (;;) {
         struct pollfd *fds;
         int nfds = make_poll_fds(&fds);
@@ -493,11 +459,11 @@ handle_key_requests_forever(void)
                 EPRINTF(3, "poll() was EINTR-ed.\n");
                 continue;
             } else {
-                perror("poll error");
+                EPRINTF(0, "poll error: %s.\n", strerror(errno));
                 exit(1);
             }
         } else if (0 == numready) {
-            fprintf(stderr, "Error: poll() => 0, but no timeout was set.\n");
+            EPRINTF(0, "Internal error: poll() => 0, but no timeout was set.\n");
             exit(1);
         }
 
@@ -508,15 +474,49 @@ handle_key_requests_forever(void)
 pid_t
 fork_off_key_handler(void)
 {
-    fprintf(stderr, "TODO: fork_off_key_handler.\n");
-    exit(1);
+    pid_t handler_pid = fork();
+    if (handler_pid == -1) {
+        EPRINTF(0, "Can't fork(): %s.\n", strerror(errno));
+        exit(1);
+    }
+
+    if (handler_pid != 0) {
+        return handler_pid;
+    }
+
+    // OK, we're the child agent process now...
+
+    FILE *f = fopen("/tmp/loggy", "w");
+
+    fprintf(f, "Hello.\n");
+    fflush(f);
+
+    // TODO: Do the setsid thing
+    /*
+    if (setsid() == -1) {
+        EPRINTF(0, "error from setsid(): %s.\n", strerror(errno));
+        exit(1);
+    }
+    */
+
+    chdir("/");
+
+    // TODO: Do the filehandle thing
+
+    // TODO: Do setrlimit thing
+
+    // TODO: Do the signal thing
+
+    handle_key_requests_forever();
+    
+    /* NOTREACHED */
+    exit(0);
 }
 
 void
-exec_subprocess(void)
+exec_subprocess(pid_t agent_pid)
 {
-    fprintf(stderr, "TODO: exec_subprocess.\n");
-    exit(1);
+    TODO();
 }
 
 int
@@ -544,8 +544,10 @@ main(int argc, char **argv)
     } else {
         pid_t agent_pid = fork_off_key_handler();
 
+        close(listen_sock);
+
         if (g_subprocess_argc) {
-            exec_subprocess();
+            exec_subprocess(agent_pid);
             /* NOTREACHED */
         } else {
             print_env_stuff(agent_pid);

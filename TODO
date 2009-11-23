@@ -2,3 +2,6 @@ o Copyright stuff
 o Install as ssh-agent
 o Work with keychain
 o Rationalise debug output
+o TODO() format + exit macro
+o Deal with partial messages from ssh - unlikely, but catastrophic!
+  + Look at length at beginning, block until length arrives.

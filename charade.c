@@ -32,16 +32,13 @@
 #define SSH_AUTHSOCKET_ENV_NAME "SSH_AUTH_SOCK"
 #define SSH_AGENTPID_ENV_NAME "SSH_AGENT_PID"
 
-
 #define GET_32BIT_MSB_FIRST(cp) \
     (((unsigned long)(unsigned char)(cp)[0] << 24) | \
-    ((unsigned long)(unsigned char)(cp)[1] << 16) | \
-    ((unsigned long)(unsigned char)(cp)[2] << 8) | \
-    ((unsigned long)(unsigned char)(cp)[3]))
+     ((unsigned long)(unsigned char)(cp)[1] << 16) | \
+     ((unsigned long)(unsigned char)(cp)[2] <<  8) | \
+     ((unsigned long)(unsigned char)(cp)[3]      ))
 
 #define GET_32BIT(cp) GET_32BIT_MSB_FIRST(cp)
-
-
 
 typedef unsigned char byte;
 

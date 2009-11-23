@@ -449,6 +449,8 @@ handle_key_requests_forever(void)
     for (;;) {
         struct pollfd *fds;
         int nfds = make_poll_fds(&fds);
+
+        EPRINTF(3, "Entering poll with %d fds.\n", nfds);
         int numready = poll(fds, nfds, -1);
         EPRINTF(3, "poll() returned %d ready.\n", numready);
 
@@ -484,12 +486,19 @@ fork_off_key_handler(void)
         return handler_pid;
     }
 
+    fprintf(stderr, "In the child process\n");
+    fflush(stdout);
+
     // OK, we're the child agent process now...
 
-    FILE *f = fopen("/tmp/loggy", "w");
+    int newfd = creat("/tmp/loggy2", O_CREAT);
+    dup2(2, newfd);
+    close(newfd);
 
+    /*
     fprintf(f, "Hello.\n");
     fflush(f);
+    */
 
     // TODO: Do the setsid thing
     /*
@@ -551,6 +560,7 @@ main(int argc, char **argv)
             /* NOTREACHED */
         } else {
             print_env_stuff(agent_pid);
+            remove_socket_at_exit = 0;
             exit(0);
         }
         /* NOTREACHED */

@@ -9,3 +9,5 @@ o Check open files in each process that results
 o Signal handling
 o Specified agent socket
 o Redirect stderr (& stdout?) to log even 'pon fork
+o Deal with revents=0x8
+o Why don't we remove ssh directory when finished???

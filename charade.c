@@ -343,7 +343,7 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
     HWND hwnd;
     hwnd = FindWindow("Pageant", "Pageant");
     if (!hwnd) {
-        EPRINTF(1, "Can't FindWindow(\"Pageant\"...) - "
+        EPRINTF(0, "Can't FindWindow(\"Pageant\"...) - "
                    "is pageant running?.\n");
         return 0;
     }
@@ -502,6 +502,7 @@ redirect_stdall(void)
 {
     fclose(stdin);
 
+    /*
     if (get_loudness() <= 0) {
         fclose(stdout);
         fclose(stderr);
@@ -509,6 +510,10 @@ redirect_stdall(void)
         redirect(stdout, "stdout");
         redirect(stderr, "stderr");
     }
+    */
+
+    redirect(stdout, "stdout");
+    redirect(stderr, "stderr");
 }
 
 pid_t

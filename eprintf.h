@@ -12,7 +12,7 @@ extern "C" {
 extern unsigned int g_volume;
 
 #define EPRINTF(Level, Format, Args...) \
-    eprintf(Level, "%d %s: " Format, Level, __func__, ##Args)
+    eprintf(Level, "%s: " Format, __func__, ##Args)
 
 int eprintf(int level, const char *fmt, ...)
         __attribute__ ((format (printf, 2, 3)));

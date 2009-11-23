@@ -12,6 +12,13 @@ Eventually I got fed up maintaining two key pairs and charade was born.
 It's really just a program that pretends to be ssh-agent on one side
 and pretends to be putty on the other.
 
-How do you run it? Just like ssh-agent.
+How do you run it? Just like ssh-agent. Specifically, to try it out:
+1. Clone the repository
+2. make && make install
+3. killall charade   # Only if upgrading
+4. killall ssh-agent   # Only if not upgrading
+5. rm -rf ~/.keychain
+6. Launch a new shell or putty and try it out
+   If you have a key in pageant, you should be able to go where it points.
 
 Wesley Darlington, November 2009.

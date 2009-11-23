@@ -13,7 +13,11 @@ include $(OBJFILES:.o=.d)
 	./depend.sh . $< > $@
 
 install: all
-	install charade.exe /usr/local/bin
+	install charade.exe /usr/bin
+	if [ -f /usr/bin/ssh-agent.exe ]; then \
+	    mv /usr/bin/ssh-agent.exe /usr/bin/ssh-agent-orig.exe; \
+	    ln -s /usr/bin/charade.exe /usr/bin/ssh-agent.exe; \
+	fi
 
 charade.exe: $(OBJFILES)
 	$(CC) $(CFLAGS) -Wl,--enable-auto-import -o $@ $+

@@ -75,6 +75,11 @@ parse_cmdline(int argc, char **argv)
             g_csh_flag = 1;
     }
 
+    if (argc > 0 && g_dontfork_flag) {
+        EPRINTF(1, "Can't not fork *and* run a subprocess!\n");
+        usage();
+    }
+
     g_subprocess_argc = argc;
     g_subprocess_argv = argv;
 }

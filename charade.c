@@ -188,14 +188,39 @@ create_socket(void)
 }
 
 void
-loop(void)
+kill_old_agent(void)
 {
-
+    fprintf(stderr, "TODO: kill_old_agent().\n");
+    exit(1);
 }
 
 void
-kill_old_agent(void)
+print_env_var(char *key, char *value)
 {
+    if (g_csh_flag) {
+        printf("setenv %s %s;\n", key, value);
+    } else {
+        printf("%s=%s; export %s\n", key, value, key);
+    }
+}
+
+#define ITOA_BUFSIZE 64
+char *
+itoa_unsafe(int i)
+{
+    static char buf[ITOA_BUFSIZE];  // Unsafeness number one
+    if (snprintf(buf, sizeof(buf), "%d", i) > sizeof(buf)) {
+        // Silently ignore: unsafeness number two
+    }
+    return buf;
+}
+#undef ITOA_BUFSIZE
+
+void
+print_env_stuff(int pid)
+{
+    print_env_var(SSH_AUTHSOCKET_ENV_NAME, socket_name);
+    print_env_var(SSH_AGENTPID_ENV_NAME, itoa_unsafe(pid));
 }
 
 void
@@ -328,6 +353,56 @@ fd_is_closed(int fd)
     close(fd);
 }
 
+int
+send_request_to_pageant(byte *buf, int numbytes, int buflen)
+{
+    // Now, let's just *assume* that it'll arrive in one big
+    // chunk and just *send* it to pageant...
+    HWND hwnd;
+    hwnd = FindWindow("Pageant", "Pageant");
+    if (!hwnd) {
+        fprintf(stderr, "Error: couldn't find pageant window.\n");
+        exit(1);
+    }
+    char mapname[512];
+    // TODO: FFS don't use sprintf!!!!!
+    sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
+    HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, 
+                                       PAGE_READWRITE, 0, 
+                                       AGENT_MAX_MSGLEN, mapname);
+    if (filemap == NULL || filemap == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "TODO: What do we do here? I have no idea yet.\n");
+        exit(1);
+    }
+
+    byte *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
+    memcpy(p, buf, numbytes);
+    COPYDATASTRUCT cds;
+    cds.dwData = AGENT_COPYDATA_ID;
+    cds.cbData = 1 + strlen(mapname);
+    cds.lpData = mapname;
+
+    int id = SendMessage(hwnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM) &cds);
+    int retlen = 0;
+    if (id > 0) {
+        retlen = 4 + GET_32BIT(p);
+        if (retlen > buflen) {
+            fprintf(stderr, "Nearly buffer overflow (%ld > %ld)! Quitting.\n",
+                    (long) retlen, (long) buflen);
+            exit(1);
+        }
+        memcpy(buf, p, retlen);
+    } else {
+        fprintf(stderr, "TODO: Couldn't SendMessage. Quitting.\n");
+        exit(1);
+    }
+    UnmapViewOfFile(p);
+    CloseHandle(filemap);
+
+    return retlen;
+}
+ 
+
 void
 deal_with_ready_fds(struct pollfd *fds, int nfds)
 {
@@ -354,55 +429,17 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 fprintf(stderr, "TODO: fd %d error, errno is %s.\n", fds[i].fd, strerror(errno));
                 exit(1);
             } else {
-                // Now, let's just *assume* that it'll arrive in one big
-                // chunk and just *send* it to pageant...
-                HWND hwnd;
-                hwnd = FindWindow("Pageant", "Pageant");
-                if (!hwnd) {
-                    fprintf(stderr, "Error: couldn't find pageant window.\n");
-                    exit(1);
-                }
-                char mapname[512];
-                // TODO: FFS don't use sprintf!!!!!
-                sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
-                HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE,
-                                            0, AGENT_MAX_MSGLEN, mapname);
-                if (filemap == NULL || filemap == INVALID_HANDLE_VALUE) {
-                    fprintf(stderr, "TODO: What do we do here? I have no idea yet.\n");
-                    exit(1);
-                }
-                byte *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
-                memcpy(p, buf, numbytes);
-                COPYDATASTRUCT cds;
-                cds.dwData = AGENT_COPYDATA_ID;
-                cds.cbData = 1 + strlen(mapname);
-                cds.lpData = mapname;
-
-                int id = SendMessage(hwnd, WM_COPYDATA, (WPARAM) NULL, (LPARAM) &cds);
-                int retlen = 0;
-                if (id > 0) {
-                    retlen = 4 + GET_32BIT(p);
-                    if (retlen > sizeof(buf)) {
-                        fprintf(stderr, "Nearly a buffer overflow, oh yeah! Quitting.\n");
-                        exit(1);
-                    }
-                    memcpy(buf, p, retlen);
-                } else {
-                    fprintf(stderr, "TODO: Couldn't SendMessage. Quitting.\n");
-                    exit(1);
-                }
-                UnmapViewOfFile(p);
-                CloseHandle(filemap);
-
-                // Now, send buf back to the socket. We should probably loop and retry
-                // or use poll properly since it's nonblocking...
+                int retlen = send_request_to_pageant(buf, numbytes, sizeof(buf));
+                // Now, send buf back to the socket. We should probably 
+                // loop and retry or use poll properly since it's nonblocking...
                 ssize_t byteswritten = write(fds[i].fd, buf, retlen);
                 if (byteswritten != retlen) {
-                    fprintf(stderr, "Tried to write %d bytes, ended up writing %d. Quitting.\n",
+                    fprintf(stderr, "Tried to write %d bytes, "
+                                    "ended up writing %d. Quitting.\n",
                             retlen, byteswritten);
                     exit(1);
                 }
-            }
+          }
         }
     }
 }
@@ -435,6 +472,20 @@ handle_key_requests_forever(void)
     }
 }
 
+pid_t
+fork_off_key_handler(void)
+{
+    fprintf(stderr, "TODO: fork_off_key_handler.\n");
+    exit(1);
+}
+
+void
+exec_subprocess(void)
+{
+    fprintf(stderr, "TODO: exec_subprocess.\n");
+    exit(1);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -452,10 +503,23 @@ main(int argc, char **argv)
 
     create_socket();
 
-    fork_subprocess();
+    if (g_dontfork_flag) {
+        // This is "debug" mode, but I prefer to call it dontfork mode...
+        print_env_stuff(getpid());
+        handle_key_requests_forever();
+        /* NOTREACHED */
+    } else {
+        pid_t agent_pid = fork_off_key_handler();
 
-    handle_key_requests_forever();
-
+        if (g_subprocess_argc) {
+            exec_subprocess();
+            /* NOTREACHED */
+        } else {
+            print_env_stuff(agent_pid);
+            exit(0);
+        }
+        /* NOTREACHED */
+    }
     /* NOTREACHED */
 
     exit(0);

@@ -30,6 +30,26 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
 {
     EPRINTF(3, "Sending %d bytes to pageant.\n", numbytes);
 
+    if (numbytes < 4) {
+        EPRINTF(0, "Pageant-bound message too short (%d bytes).\n", numbytes);
+        return 0;
+    }
+    int ostensible_numbytes = GET_32BIT(buf);
+    if (numbytes != ostensible_numbytes + 4) {
+        EPRINTF(0, "Pageant-bound message is %d bytes long, but it "
+                "*says* it has %d=%d+4 bytes in it.\n",
+                numbytes, ostensible_numbytes+4, ostensible_numbytes);
+        return 0;
+    }
+
+    int i;
+    for (i = 0; i < numbytes;) {
+        fprintf(stderr, "%02x ", buf[i]);
+        ++i;
+        if (!(i%8)) fprintf(stderr, " ");
+        if (!(i%16) || i == numbytes) fprintf(stderr, "\n");
+    }
+
     // Now, let's just *assume* that it'll arrive in one big
     // chunk and just *send* it to pageant...
     HWND hwnd;

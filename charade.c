@@ -353,7 +353,7 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 close(fds[i].fd);
                 fd_is_closed(fds[i].fd);
             } else {
-                int retlen = send_request_to_pageant(buf, numbytes, sizeof(buf));
+                int retlen = send_request_to_pageant(buf, numbytes, sizeof buf);
 
                 // Now, send buf back to the socket. We should probably 
                 // loop and retry or use poll properly since it's nonblocking...

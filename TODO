@@ -1,3 +1,5 @@
+o Messages can come off the socket in two parts. Darn. Work properly
+  when we don't get a full message.
 o Copyright stuff
 o Install as ssh-agent
 o Work with keychain

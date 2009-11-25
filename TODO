@@ -6,3 +6,4 @@ o Specified agent socket
 o Redirect stderr (& stdout?) to *not* log if told not to
 o Do we remove ssh directory when finished??? (Signals!)
 o Check 64-bit cygwin
+o Package sanely for cygwin

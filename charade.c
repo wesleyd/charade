@@ -470,11 +470,17 @@ socket_contains_full_message(struct socklist_node_t *np)
 
     // The message length in the message doesn't include the four
     // bytes of the length itself.
-    if (claimed_numbytes + 4 < np->len) {
+    if (np->len < claimed_numbytes + 4) {
+        EPRINTF(4, "short read? first four bytes imply %d bytes (%d+4=%d), "
+                " but we only have %d bytes.\n", 
+                claimed_numbytes+4, claimed_numbytes,
+                claimed_numbytes+4, np->len);
         return 0;
+    } else {
+        EPRINTF(5, "claimed_numbytes is %u, but np->len is %lu.\n",
+                claimed_numbytes, (long unsigned) np->len);
+        return 1;
     }
-
-    return 1;
 }
 
 void
@@ -492,11 +498,11 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
         if (!revents)
             continue;
 
-        // Don't just *assume* that entry 0 is listen_sock...
         if (listen_sock == fd) {
+            // We daren't just *assume* that entry 0 is listen_sock...
             accept_new_socket();
             continue;
-        } else if (revents & POLLHUP) {
+        } else if (revents & POLLHUP) {  // Does this ever even happen?
             close(fd);  // Probably unnecessary, but harmless. (?)
             fd_is_closed(fd);
             continue;
@@ -561,9 +567,6 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 EPRINTF(5, "Socket %d has %d bytes, but not a full message.\n",
                         np->fd, np->len);
             }
- 
-
-
         } else {
             EPRINTF(0, "Don't know how to deal with revents=0x%x on fd %d.\n",
                     revents, fd);

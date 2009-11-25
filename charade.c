@@ -28,6 +28,9 @@
 #define LISTEN_BACKLOG 5
 #define BUFSIZE 8192
 
+// I picked this number out of my ass. It's, like, a sanity check.
+#define CRAZY_MAX_MESSAGE_SIZE 65535
+
 // TODO: is there actually something magical about this number?
 #define AGENT_COPYDATA_ID 0x804e50ba 
 
@@ -41,6 +44,7 @@ struct socklist_node_t {
     TAILQ_ENTRY(socklist_node_t) next;
     int fd;
     byte *data;
+    size_t len;
 };
 TAILQ_HEAD(socklist_queue, socklist_node_t) socklist;
 
@@ -62,6 +66,7 @@ add_socket_to_socket_list(int sock)
 
     p->fd = sock;
     p->data = NULL;
+    p->len = 0;
 
     EPRINTF(5, "adding socket %d to socket list.\n", sock);
 
@@ -308,12 +313,15 @@ void
 fd_is_closed(int fd)
 {
     EPRINTF(3, "Removing fd %d from list.\n", fd);
-    // Remove it from the list...
 
-    // Remove the fd from the list...
     struct socklist_node_t *p;
     for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
         if (p->fd == fd) {
+
+            free(p->data);
+            p->data = NULL;
+            p->len = 0;
+
             TAILQ_REMOVE(&socklist, p, next);
             break;
         }
@@ -323,54 +331,244 @@ fd_is_closed(int fd)
     close(fd);
 }
 
-void
-deal_with_ready_fds(struct pollfd *fds, int nfds)
-{
-    EPRINTF(3, "nfds=%d.\n", nfds);
 
-    int i;
-    for (i = 0; i < nfds; ++i) {
-        if (!fds[i].revents)
-            continue;
-
-        // Don't just *assume* that entry 0 is listen_sock...
-        if (listen_sock == fds[i].fd) {
-            accept_new_socket();
-        } else if (fds[i].revents & POLLIN) {
-            // Deal with data from fds[i].fd...
-            const size_t count = BUFSIZE;
-            byte buf[BUFSIZE];
-
+/*
             ssize_t numbytes = read(fds[i].fd, buf, count);
 
             if (0 == numbytes) {
                 close(fds[i].fd);
                 fd_is_closed(fds[i].fd);
+                continue;
             } else if (-1 == numbytes) {
                 // TODO: Should we handle EAGAIN/EWOULDBLOCK specially?
                 EPRINTF(0, "internal error: read(fd=%d) => errno=%d/%s.\n", 
                         fds[i].fd, errno, strerror(errno));
                 close(fds[i].fd);
                 fd_is_closed(fds[i].fd);
+                continue;
+*/
+
+struct socklist_node_t *
+socklist_node_from_fd(int fd)
+{
+    struct socklist_node_t *p;
+    for (p = socklist.tqh_first; p != NULL; p = p->next.tqe_next) {
+        if (p->fd == fd) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+// Return true if the socket - based on the data we've read from
+// it so far - can never, ever contain a valid message.
+int
+socket_will_never_contain_message(struct socklist_node_t *np)
+{
+    if (np->len > CRAZY_MAX_MESSAGE_SIZE) {  // OK, waaaay too much data
+        return 1;
+    }
+
+    if (np->len < 4) {  // Too soon to tell
+        return 0;
+    }
+
+    unsigned int claimed_numbytes = GET_32BIT(np->data);
+    if (claimed_numbytes > CRAZY_MAX_MESSAGE_SIZE) {
+        return 1;
+    }
+
+    return 0;
+}
+
+
+// Read data from np->fd into np->buf, expanding np->buf as necessary.
+// Return zero for success.
+// Non-zero means some sort of failure, and caller should close socket etc.
+int
+read_data_for_node(struct socklist_node_t *np)
+{
+    if (!np) {
+        EPRINTF(0, "null pointer!");
+        return -1;
+    }
+
+    int data_still_to_be_read = 1;
+
+    // byte buf[BUFSIZE];
+    byte buf[3];
+
+    while (data_still_to_be_read) {
+        // Protect against infinite memory consumption...
+        if(socket_will_never_contain_message(np)) {
+            EPRINTF(0, "socket %d will never contain message.\n", np->fd);
+            return -1;
+        }
+
+        ssize_t numbytes = read(np->fd, buf, sizeof buf);
+
+        if (0 == numbytes) {
+            EPRINTF(1, "read zero bytes from socket. Must have closed.\n");
+            return -1;
+        } else if (-1 == numbytes) {
+            if (EAGAIN == errno || EWOULDBLOCK == errno) {
+                EPRINTF(5, "read(fd=%d) => EAGAIN/EWOULDBLOCK: errno=%d.\n",
+                        np->fd, errno);
+                // No problem, this just means we've exhausted the socket...
+                return 0;
+            } else if (EINTR == errno) {
+                EPRINTF(0, "read(fd=%d) => EINTR: retrying.\n", np->fd);
+                continue;
             } else {
-                int retlen = send_request_to_pageant(buf, numbytes, sizeof buf);
+                EPRINTF(0, "internal error: read(fd=%d) => -1/errno=%d: %s.\n", 
+                        np->fd, errno, strerror(errno));
+                return -1;
+            }
+        } else if (numbytes < 0) {
+            EPRINTF(0, "weird!!! read(fd=%d) returned %d. Giving up.\n",
+                    np->fd, (int) numbytes);
+            return -1;
+        } else {
+            // Normal case: there was data to be read, and we read it...
+            // numbytes is positive (and not zero either!)
+
+            if (numbytes < sizeof(buf)) {
+                data_still_to_be_read = 0;
+            } else if (numbytes > sizeof(buf)) {
+                EPRINTF(0, "Aiee! Got more bytes than buffer! (%d>%d)\n",
+                        numbytes, sizeof(buf));
+                return -1;
+            } else {  // numbytes == sizeof(buf)
+                data_still_to_be_read = 1;
+            }
+
+            // Right, now put the data in a sensible place...
+            np->data = realloc(np->data, np->len + numbytes);
+            if (!np->data) {
+                EPRINTF(0, "realloc failure (%lu -> %lu)!\n",
+                        (long unsigned) np->len,
+                        (long unsigned) (np->len + numbytes));
+                return -1;
+            }
+            memcpy(np->data + np->len, buf, numbytes);
+            np->len += numbytes;
+        }
+    }
+
+    return 0;
+}
+
+int
+socket_contains_full_message(struct socklist_node_t *np)
+{
+    if (np->len < 4) {
+        return 0;
+    }
+
+    // If np->len is non-zero, then np->data is non-null...
+    unsigned int claimed_numbytes = GET_32BIT(np->data);
+
+    // The message length in the message doesn't include the four
+    // bytes of the length itself.
+    if (claimed_numbytes + 4 < np->len) {
+        return 0;
+    }
+
+    return 1;
+}
+
+void
+deal_with_ready_fds(struct pollfd *fds, int nfds)
+{
+    EPRINTF(3, "we have %d fds in total\n", nfds);
+
+    int i;
+    for (i = 0; i < nfds; ++i) {
+        const int fd = fds[i].fd;
+        const short revents = fds[i].revents;
+
+        EPRINTF(5, "What about fd %d (revents = 0x%hx)?\n", fd, revents);
+
+        if (!revents)
+            continue;
+
+        // Don't just *assume* that entry 0 is listen_sock...
+        if (listen_sock == fd) {
+            accept_new_socket();
+            continue;
+        } else if (revents & POLLHUP) {
+            close(fd);  // Probably unnecessary, but harmless. (?)
+            fd_is_closed(fd);
+            continue;
+        } else if (revents & POLLIN) {
+            struct socklist_node_t *np = socklist_node_from_fd(fd);
+            
+            if (!np) {
+                EPRINTF(0, "no such get_socklist_node for fd %d!\n", fd);
+                continue;
+            }
+
+            if (read_data_for_node(np)) {
+                // This includes if the socket has just closed...
+                EPRINTF(2, "Error reading data for fd %d. Closing.\n", fd);
+                close(fd);
+                fd_is_closed(fd);
+                continue;
+            }
+
+            if (socket_will_never_contain_message(np)) {
+                EPRINTF(0, "Giving up on fd %d.\n", fd);
+                close(fd);
+                fd_is_closed(fd);
+                continue;
+            }
+
+            if (socket_contains_full_message(np)) {
+                EPRINTF(5, "Socket %d contains (at least) a full message.\n",
+                        np->fd);
+
+                byte outbuf[BUFSIZE];
+
+                // Note, we *assume* that there won't be *more* than one
+                // message in np...
+
+                int retlen = send_request_to_pageant(np->data, np->len,
+                                                     outbuf, sizeof outbuf);
+                if (retlen <= 0) {
+                    // Error sending message to pageant...
+                    EPRINTF(0, "Error sending %d-byte message to pageant.\n",
+                            np->len);
+                    close(fd);
+                    fd_is_closed(fd);
+                    continue;
+                }
+
+                free(np->data);
+                np->data = NULL;
+                np->len = 0;
 
                 // Now, send buf back to the socket. We should probably 
                 // loop and retry or use poll properly since it's nonblocking...
-                ssize_t byteswritten = write(fds[i].fd, buf, retlen);
+                ssize_t byteswritten = write(fd, outbuf, retlen);
                 if (byteswritten != retlen) {
-                    EPRINTF(0, "Tried to write %d bytes, "
-                               "ended up writing %d.\n",
-                            retlen, byteswritten);
-                    close(fds[i].fd);
-                    fd_is_closed(fds[i].fd);
+                    EPRINTF(0, "Tried to write %d bytes back to ssh client, "
+                               "ended up writing %d (errno is %d).\n",
+                            retlen, byteswritten, errno);
+                    close(fd);
+                    fd_is_closed(fd);
                 }
+            } else {
+                EPRINTF(5, "Socket %d has %d bytes, but not a full message.\n",
+                        np->fd, np->len);
             }
+ 
+
+
         } else {
             EPRINTF(0, "Don't know how to deal with revents=0x%x on fd %d.\n",
-                    fds[i].revents, fds[i].fd);
-            close(fds[i].fd);
-            fd_is_closed(fds[i].fd);
+                    revents, fd);
+            close(fd);
+            fd_is_closed(fd);
         }
     }
 }

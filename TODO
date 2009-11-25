@@ -1,15 +1,8 @@
-o Messages can come off the socket in two parts. Darn. Work properly
-  when we don't get a full message.
 o Copyright stuff
-o Install as ssh-agent
-o Work with keychain
-o Rationalise debug output
-o TODO() format + exit macro
-o Deal with partial messages from ssh - unlikely, but catastrophic!
-  + Look at length at beginning, block until length arrives.
+o Work on debug output
 o Check open files in each process that results
 o Signal handling
 o Specified agent socket
-o Redirect stderr (& stdout?) to log even 'pon fork
-o Deal with revents=0x8
-o Why don't we remove ssh directory when finished???
+o Redirect stderr (& stdout?) to *not* log if told not to
+o Do we remove ssh directory when finished??? (Signals!)
+o Check 64-bit cygwin

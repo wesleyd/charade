@@ -12,6 +12,9 @@ extern "C" {
 #define EPRINTF(Level, Format, Args...) \
     eprintf(Level, "%s: " Format, __func__, ##Args)
 
+#define EPRINTF_RAW(Level, Format, Args...) \
+    eprintf(Level, Format, ##Args)
+
 int eprintf(int level, const char *fmt, ...)
         __attribute__ ((format (printf, 2, 3)));
 

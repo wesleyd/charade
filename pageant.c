@@ -17,41 +17,41 @@
 
 #define AGENT_MAX_MSGLEN 8192
 
-#define GET_32BIT_MSB_FIRST(cp) \
-    (((unsigned long)(unsigned char)(cp)[0] << 24) | \
-     ((unsigned long)(unsigned char)(cp)[1] << 16) | \
-     ((unsigned long)(unsigned char)(cp)[2] <<  8) | \
-     ((unsigned long)(unsigned char)(cp)[3]      ))
-
-#define GET_32BIT(cp) GET_32BIT_MSB_FIRST(cp)
-
-int
-send_request_to_pageant(byte *buf, int numbytes, int bufsize)
+void
+print_buf(int level, byte *buf, int numbytes)
 {
-    EPRINTF(3, "Sending %d bytes to pageant.\n", numbytes);
-
-    if (numbytes < 4) {
-        EPRINTF(0, "Pageant-bound message too short (%d bytes).\n", numbytes);
-        return 0;
-    }
-    int ostensible_numbytes = GET_32BIT(buf);
-    if (numbytes != ostensible_numbytes + 4) {
-        EPRINTF(0, "Pageant-bound message is %d bytes long, but it "
-                "*says* it has %d=%d+4 bytes in it.\n",
-                numbytes, ostensible_numbytes+4, ostensible_numbytes);
-        return 0;
-    }
-
     int i;
     for (i = 0; i < numbytes;) {
-        fprintf(stderr, "%02x ", buf[i]);
+        EPRINTF_RAW(level, "%02x ", buf[i]);
         ++i;
-        if (!(i%8)) fprintf(stderr, " ");
-        if (!(i%16) || i == numbytes) fprintf(stderr, "\n");
+        if (!(i%8)) EPRINTF_RAW(level, " ");
+        if (!(i%16) || i == numbytes) EPRINTF_RAW(level, "\n");
+    }
+}
+
+
+
+// "in" means "to pageant", "out" means "from pageant". Sorry.
+int
+send_request_to_pageant(byte *inbuf, int inbytes, byte *outbuf, int outbuflen)
+{
+    EPRINTF(3, "Sending %d bytes to pageant.\n", inbytes);
+
+    if (inbytes < 4) {
+        EPRINTF(0, "Pageant-bound message too short (%d bytes).\n", inbytes);
+        return 0;
+    }
+    int claimed_inbytes = GET_32BIT(inbuf);
+    if (inbytes != claimed_inbytes + 4) {
+        EPRINTF(0, "Pageant-bound message is %d bytes long, but it "
+                "*says* it has %d=%d+4 bytes in it.\n",
+                inbytes, claimed_inbytes+4, claimed_inbytes);
+        return 0;
     }
 
-    // Now, let's just *assume* that it'll arrive in one big
-    // chunk and just *send* it to pageant...
+    EPRINTF(5, "Message to pageant (%d bytes):\n", inbytes);
+    print_buf(5, inbuf, inbytes);
+
     HWND hwnd;
     hwnd = FindWindow("Pageant", "Pageant");
     if (!hwnd) {
@@ -72,7 +72,7 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
     }
 
     byte *shmem = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
-    memcpy(shmem, buf, numbytes);
+    memcpy(shmem, inbuf, inbytes);
     COPYDATASTRUCT cds;
     cds.dwData = AGENT_COPYDATA_ID;
     cds.cbData = 1 + strlen(mapname);
@@ -82,12 +82,15 @@ send_request_to_pageant(byte *buf, int numbytes, int bufsize)
     int retlen = 0;
     if (id > 0) {
         retlen = 4 + GET_32BIT(shmem);
-        if (retlen > bufsize) {
+        if (retlen > outbuflen) {
             EPRINTF(0, "Buffer too small to contain reply from pageant.\n");
             return 0;
         }
 
-        memcpy(buf, shmem, retlen);
+        memcpy(outbuf, shmem, retlen);
+
+        EPRINTF(5, "Reply from pageant (%d bytes):\n", retlen);
+        print_buf(5, outbuf, retlen);
     } else {
         EPRINTF(0, "Couldn't SendMessage().\n");
         return 0;

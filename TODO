@@ -7,3 +7,5 @@ o Redirect stderr (& stdout?) to *not* log if told not to
 o Do we remove ssh directory when finished??? (Signals!)
 o Check 64-bit cygwin
 o Package sanely for cygwin
+o Doesn't seem to work over RDP, but putty can speak to pageant fine. Hmmm.
+  Is that the same as the plink bug?

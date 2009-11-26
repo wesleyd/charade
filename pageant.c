@@ -56,7 +56,8 @@ send_request_to_pageant(byte *inbuf, int inbytes, byte *outbuf, int outbuflen)
     hwnd = FindWindow("Pageant", "Pageant");
     if (!hwnd) {
         EPRINTF(0, "Can't FindWindow(\"Pageant\"...) - "
-                   "is pageant running?.\n");
+                   "is pageant running?. (GetLastError is %x)\n",
+                   (unsigned) GetLastError());
         return 0;
     }
 

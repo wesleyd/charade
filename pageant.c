@@ -29,7 +29,25 @@ print_buf(int level, byte *buf, int numbytes)
     }
 }
 
+BOOL CALLBACK
+wnd_enum_proc(HWND hwnd, LPARAM lparam)
+{
+    char window_name[512] = "\0";
+    GetWindowText(hwnd, window_name, 512);
+    EPRINTF(0, "Window %p: title '%s'.\n", hwnd, window_name);
+    return TRUE;
+}
 
+void
+enum_windows(void)
+{
+    BOOL retval = EnumWindows(wnd_enum_proc, (LPARAM) 0);
+
+    if (!retval) {
+        EPRINTF(0, "EnumWindows failed; GetLastError() => %d.\n",
+                (int) GetLastError());
+    }
+}
 
 // "in" means "to pageant", "out" means "from pageant". Sorry.
 int
@@ -96,6 +114,9 @@ send_request_to_pageant(byte *inbuf, int inbytes, byte *outbuf, int outbuflen)
         EPRINTF(0, "Couldn't SendMessage().\n");
         return 0;
     }
+
+    // enum_windows();
+
 
     UnmapViewOfFile(shmem);
     CloseHandle(filemap);

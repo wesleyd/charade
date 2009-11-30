@@ -9,3 +9,4 @@ o Check 64-bit cygwin
 o Package sanely for cygwin
 o Doesn't seem to work over RDP, but putty can speak to pageant fine. Hmmm.
   Is that the same as the plink bug?
+o Should charade die when subprocess dies?

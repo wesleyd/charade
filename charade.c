@@ -692,7 +692,18 @@ fork_off_key_handler(void)
 void
 exec_subprocess(pid_t agent_pid)
 {
-    TODO();
+    close(listen_sock);
+
+    if (setenv(SSH_AUTHSOCKET_ENV_NAME, socket_name, 1) ||
+        setenv(SSH_AGENTPID_ENV_NAME, itoa_unsafe(agent_pid), 1)) {
+        EPRINTF(0, "can't setenv - errno is %d.\n", errno);
+        exit(1);
+    }
+
+    execvp(g_subprocess_argv[0], g_subprocess_argv);
+    EPRINTF(0, "can't execvp(%s): %s.\n", 
+            g_subprocess_argv[0], strerror(errno));
+    exit(1);
 }
 
 int

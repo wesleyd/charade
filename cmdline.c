@@ -3,10 +3,12 @@
  * Parse command line arguments for charade.
  */
 
+#include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
+#include "copyright.h"
 #include "cmdline.h"
 #include "eprintf.h"
 
@@ -30,8 +32,14 @@ usage(void)
     EPRINTF(0, "  -d          Don't fork.\n");
     EPRINTF(0, "  -v [-v ...] More trace output.\n");
     EPRINTF(0, "  -a socket   Bind agent socket to given name.\n");
+    EPRINTF(0, "  --copyright Print out copyright message & licence.\n");
     exit(1);
 }
+
+static struct option opts[] = {
+    {"copyright", 0, NULL, 'C'},
+    {NULL, 0, NULL, 0}
+};
 
 void
 parse_cmdline(int argc, char **argv)
@@ -40,7 +48,7 @@ parse_cmdline(int argc, char **argv)
     extern int optind, opterr;
     extern char *optarg;
 
-    while (-1 != (ch = getopt(argc, argv, "cskdva:"))) {
+    while (-1 != (ch = getopt_long(argc, argv, "cskdva:", opts, NULL))) {
         switch (ch) {
             case 'c': ++g_csh_flag;
                       break;
@@ -53,6 +61,8 @@ parse_cmdline(int argc, char **argv)
             case 'v': louder();
                       break;
             case 'a': g_socket_name = optarg;
+                      break;
+            case 'C': print_copyright();
                       break;
             default: usage();
         }

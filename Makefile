@@ -3,7 +3,9 @@ export CFLAGS := -Wall -Werror -O2
 
 all: charade.exe
 
-CFILES := $(wildcard *.c)
+# sort to remove duplicates, specifically copyright.c
+# (it's auto-generated, but it'll appeare twice on second & subsequent makes: bad)
+CFILES := $(sort $(wildcard *.c) copyright.c)
 #OBJFILES := $(patsubst %.c,%.o,$(CFILES))
 OBJFILES := $(CFILES:.c=.o)
 
@@ -21,6 +23,9 @@ install: all
 
 charade.exe: $(OBJFILES)
 	$(CC) $(CFLAGS) -Wl,--enable-auto-import -o $@ $+
+
+copyright.c: LICENCE generate-copyright.pl
+	./generate-copyright.pl LICENCE > $@
 
 clean:
 	rm -f charade.exe

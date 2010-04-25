@@ -16,7 +16,7 @@ include $(OBJFILES:.o=.d)
 
 install: all
 	install charade.exe /usr/bin
-	if [ -f /usr/bin/ssh-agent.exe ]; then \
+	if [ -f /usr/bin/ssh-agent.exe -a \! -f /usr/bin/ssh-agent-orig.exe ]; then \
 	    mv /usr/bin/ssh-agent.exe /usr/bin/ssh-agent-orig.exe; \
 	    ln -s /usr/bin/charade.exe /usr/bin/ssh-agent.exe; \
 	fi

@@ -20,6 +20,7 @@ Required cygwin packages
 * `make`
 * `keychain`
 * `openssh`
+* `psmisc`
 
 Installation instructions
 -------------------------

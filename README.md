@@ -4,7 +4,7 @@ Intro
 
 If you don't use cygwin or pageant, you don't need charade.  If you're happy with plink, you don't need charade.  (I love putty, but I prefer openssh to plink.)
 
-Background: I tolerate Windows XP. I actually quite like it. But it needs putty, and it needs cygwin to be usable. I used to maintain two separate sets of ssh keys: one for putty, which I kept in pageant, and another for cygwin's openssh, which I kept in ssh-agent/keychain.
+**Background:** I tolerate Windows XP. I actually quite like it. But it needs putty, and it needs cygwin to be usable. I used to maintain two separate sets of ssh keys: one for putty, which I kept in pageant, and another for cygwin's openssh, which I kept in ssh-agent/keychain.
 
 Eventually I got fed up maintaining two key pairs and charade was born.
 
@@ -16,10 +16,10 @@ I stole large swaths of code from (i) Simon Tatham's putty (mostly [putty-src/wi
 
 Required cygwin packages
 ------------------------
-*    gcc-g++
-*    make
-*    keychain
-*    openssh
+* `gcc-g++`
+* `make`
+* `keychain`
+* `openssh`
 
 Installation instructions
 -------------------------

@@ -31,13 +31,20 @@ I have these two lines in my .bash_profile file:
     . .keychain/`hostname`-sh
 
 How do you run it? Just like ssh-agent. Specifically, to try it out:
-1. Clone the repository
+
+1.     git clone git://github.com/wesleyd/charade.git #Clone the repository
+
 2.     make && make install
+
 3.     killall charade   # Only if upgrading
+
 4.     killall ssh-agent   # Only if not upgrading
+
 5.     rm -rf ~/.keychain
+
 6. Launch a new shell or putty and try it out
-   If you have a key in pageant, you should be able to go where it points.
+
+If you have a key in pageant, you should be able to go where it points.
 
 It just forwards ssh messages, so surprising (to me!) things Just Work,
 like adding keys with ssh-add instead of through the pageant gui.

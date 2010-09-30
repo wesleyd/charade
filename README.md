@@ -1,4 +1,6 @@
-**Charade** is an ssh-agent in cygwin that proxies requests to pageant.
+Intro
+-----
+**Charade** is an ssh-agent in [cygwin](http://www.cygwin.com/) that proxies requests to [pageant](http://the.earth.li/~sgtatham/putty/0.60/htmldoc/Chapter9.html#pageant).
 
 If you don't use cygwin or pageant, you don't need charade.  If you're happy with plink, you don't need charade.  (I love putty, but I prefer openssh to plink.)
 

@@ -23,6 +23,7 @@ Required cygwin packages
 * `keychain`
 * `openssh`
 * `psmisc`
+* `keychain`
 
 Installation instructions
 -------------------------

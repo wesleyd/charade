@@ -15,11 +15,7 @@ include $(OBJFILES:.o=.d)
 	./depend.sh . $< > $@
 
 install: all
-	install charade.exe /usr/bin
-	if [ -f /usr/bin/ssh-agent.exe -a \! -f /usr/bin/ssh-agent-orig.exe ]; then \
-	    mv /usr/bin/ssh-agent.exe /usr/bin/ssh-agent-orig.exe; \
-	    ln -s /usr/bin/charade.exe /usr/bin/ssh-agent.exe; \
-	fi
+	./install.sh
 
 charade.exe: $(OBJFILES)
 	$(CC) $(CFLAGS) -Wl,--enable-auto-import -o $@ $+
@@ -27,7 +23,19 @@ charade.exe: $(OBJFILES)
 copyright.c: LICENCE generate-copyright.pl
 	./generate-copyright.pl LICENCE > $@
 
+binary: all VERSION
+	export VNAME=charade-`cat VERSION`; \
+	export DIR=temp/$$VNAME; \
+	mkdir -p $$DIR/ \
+	&& cp charade.exe $$DIR \
+	&& cp install.sh $$DIR \
+	&& cp README.md $$DIR \
+	&& (cd temp; tar cf - $$VNAME | bzip2 -9) > $$VNAME.tar.bz2 \
+	&& echo created $$VNAME.tar.bz2
+
 clean:
 	rm -f charade.exe
 	rm -f *.o *.obj
 	rm -f *.d
+	rm -rf temp
+	rm -f charade-*.tar.bz2 charade-*.tar.gz

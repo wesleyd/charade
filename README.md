@@ -19,35 +19,36 @@ Required cygwin packages
 *    keychain
 *    openssh
 
-I have these two lines in my ~/.bash_profile file:
-    keychain -q -Q
-    . .keychain/`hostname`-sh
+Installation instructions
+-------------------------
 
-How do you run it? Just like ssh-agent. Specifically, to try it out:
-
-* Clone the repository
+1 Clone the repository
     git clone git://github.com/wesleyd/charade.git
 
-* Build and install charade
+2 Build and install charade
     
          make && make install
 
-* Stop running charade or ssh-agent processes
+3 Stop running charade or ssh-agent processes
 
          killall charade   # Only if upgrading
 
          killall ssh-agent   # Only if not upgrading
 
-* Remove existing keychain files to clear references to ssh-agent
+4 Remove existing keychain files to clear references to ssh-agent
 
          rm -rf ~/.keychain
 
 
-* Add the two lines listed above to ~/.bash_profile
+5 Add the two lines listed below to ~/.bash_profile
 
-* Logout, launch a new shell or putty and try it out
+         keychain -q -Q
+
+         . .keychain/`hostname`-sh
+
+6 Logout, launch a new shell or putty and try it out
     
-    ssh git@github.com
+        ssh git@github.com
 
 If you have a key in pageant, you should be able to go where it points.
 

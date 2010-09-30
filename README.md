@@ -14,6 +14,8 @@ I stole large swathes of code from (i) Simon Tatham's putty (mostly putty-src/wi
 
 Required cygwin packages
 ------------------------
+*    gcc-g++
+*    make
 *    keychain
 *    openssh
 
@@ -23,17 +25,20 @@ I have these two lines in my ~/.bash_profile file:
 
 How do you run it? Just like ssh-agent. Specifically, to try it out:
 
-     git clone git://github.com/wesleyd/charade.git #Clone the repository
+* Clone the repository
+    git clone git://github.com/wesleyd/charade.git
 
-     make && make install
+* Build the     make && make install
 
+* Stop charade or ssh-agent processes
      killall charade   # Only if upgrading
-
      killall ssh-agent   # Only if not upgrading
 
+* Remove existing keychain files to clear references to ssh-agent
      rm -rf ~/.keychain
 
-Launch a new shell or putty and try it out
+* Launch a new shell or putty and try it out
+    ssh git@github.com
 
 If you have a key in pageant, you should be able to go where it points.
 

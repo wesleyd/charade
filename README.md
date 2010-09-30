@@ -14,6 +14,8 @@ It aspires to be a drop-in replacement for ssh-agent, and that's how I use it at
 
 I stole large swaths of code from (i) Simon Tatham's putty (mostly [putty-src/windows/winpgntc.c](http://svn.tartarus.org/sgt/putty/)) and (ii) openssh's (and Tatu Ylonen's and Marcus Friedl's) ssh-agent.c.
 
+Also check out [cuviper's ssh-pageant](http://github.com/cuviper/ssh-pageant), which does something similar.
+
 Required cygwin packages
 ------------------------
 * `gcc-g++`

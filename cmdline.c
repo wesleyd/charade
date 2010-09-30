@@ -45,8 +45,13 @@ void
 parse_cmdline(int argc, char **argv)
 {
     int ch;
+
+    /* I seem to get link errors when I declare these getopt variables.
+       Things seem to work fine when I don't declare them, so I'm
+       just commenting them out!
     extern int optind, opterr;
     extern char *optarg;
+    */
 
     while (-1 != (ch = getopt_long(argc, argv, "cskdva:", opts, NULL))) {
         switch (ch) {

@@ -22,31 +22,31 @@ Required cygwin packages
 Installation instructions
 -------------------------
 
-1 Clone the repository
+1. Clone the repository
     git clone git://github.com/wesleyd/charade.git
 
-2 Build and install charade
+2. Build and install charade
     
          make && make install
 
-3 Stop running charade or ssh-agent processes
+3. Stop running charade or ssh-agent processes
 
          killall charade   # Only if upgrading
 
          killall ssh-agent   # Only if not upgrading
 
-4 Remove existing keychain files to clear references to ssh-agent
+4. Remove existing keychain files to clear references to ssh-agent
 
          rm -rf ~/.keychain
 
 
-5 Add the two lines listed below to ~/.bash_profile
+5. Add these two lines to ~/.bash_profile:
 
          keychain -q -Q
 
          . .keychain/`hostname`-sh
 
-6 Logout, launch a new shell or putty and try it out
+6. Logout, launch a new shell or putty and try it out
     
         ssh git@github.com
 

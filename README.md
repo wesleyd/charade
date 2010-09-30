@@ -1,4 +1,4 @@
-Charade is an ssh-agent in cygwin that proxies requests to pageant.
+**Charade** is an ssh-agent in cygwin that proxies requests to pageant.
 
 If you don't use cygwin or pageant, you don't need charade.
 If you're happy with plink, you don't need charade.
@@ -21,16 +21,21 @@ I stole large swathes of code from (i) Simon Tatham's putty (mostly
 putty-src/windows/winpgntc.c) and (ii) openssh's (and Tatu Ylonen's 
 and Marcus Friedl's) ssh-agent.c.
 
+Required cygwin packages
+------------------------
+    keychain
+    openssh
+
 I have these two lines in my .bash_profile file:
     keychain -q -Q
     . .keychain/`hostname`-sh
 
 How do you run it? Just like ssh-agent. Specifically, to try it out:
 1. Clone the repository
-2. make && make install
-3. killall charade   # Only if upgrading
-4. killall ssh-agent   # Only if not upgrading
-5. rm -rf ~/.keychain
+2.     make && make install
+3.     killall charade   # Only if upgrading
+4.     killall ssh-agent   # Only if not upgrading
+5.     rm -rf ~/.keychain
 6. Launch a new shell or putty and try it out
    If you have a key in pageant, you should be able to go where it points.
 

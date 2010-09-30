@@ -28,16 +28,25 @@ How do you run it? Just like ssh-agent. Specifically, to try it out:
 * Clone the repository
     git clone git://github.com/wesleyd/charade.git
 
-* Build the     make && make install
+* Build and install charade
+    
+         make && make install
 
-* Stop charade or ssh-agent processes
-     killall charade   # Only if upgrading
-     killall ssh-agent   # Only if not upgrading
+* Stop running charade or ssh-agent processes
+
+         killall charade   # Only if upgrading
+
+         killall ssh-agent   # Only if not upgrading
 
 * Remove existing keychain files to clear references to ssh-agent
-     rm -rf ~/.keychain
 
-* Launch a new shell or putty and try it out
+         rm -rf ~/.keychain
+
+
+* Add the two lines listed above to ~/.bash_profile
+
+* Logout, launch a new shell or putty and try it out
+    
     ssh git@github.com
 
 If you have a key in pageant, you should be able to go where it points.

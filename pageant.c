@@ -39,10 +39,59 @@
 #include "eprintf.h"
 #include "pageant.h"
 
+#ifndef NO_SECURITY
+#include <aclapi.h>
+#endif
+
 // TODO: is there actually something magical about this number?
 #define AGENT_COPYDATA_ID 0x804e50ba
 
 #define AGENT_MAX_MSGLEN 8192
+
+/*
+ * Dynamically load advapi32.dll for SID manipulation. In its absence,
+ * we degrade gracefully.
+ */
+#ifndef NO_SECURITY
+int advapi_initialised = FALSE;
+static HMODULE advapi;
+DECL_WINDOWS_FUNCTION(static, BOOL, OpenProcessToken,
+          (HANDLE, DWORD, PHANDLE));
+DECL_WINDOWS_FUNCTION(static, BOOL, GetTokenInformation,
+          (HANDLE, TOKEN_INFORMATION_CLASS,
+                       LPVOID, DWORD, PDWORD));
+DECL_WINDOWS_FUNCTION(static, BOOL, InitializeSecurityDescriptor,
+          (PSECURITY_DESCRIPTOR, DWORD));
+DECL_WINDOWS_FUNCTION(static, BOOL, SetSecurityDescriptorOwner,
+          (PSECURITY_DESCRIPTOR, PSID, BOOL));
+static int init_advapi(void)
+{
+    advapi = load_system32_dll("advapi32.dll");
+    return advapi &&
+        GET_WINDOWS_FUNCTION(advapi, OpenProcessToken) &&
+  GET_WINDOWS_FUNCTION(advapi, GetTokenInformation) &&
+  GET_WINDOWS_FUNCTION(advapi, InitializeSecurityDescriptor) &&
+  GET_WINDOWS_FUNCTION(advapi, SetSecurityDescriptorOwner);
+}
+#endif
+
+HMODULE load_system32_dll(const char *libname)
+{
+    /*
+     * Wrapper function to load a DLL out of c:\windows\system32
+     * without going through the full DLL search path. (Hence no
+     * attack is possible by placing a substitute DLL earlier on that
+     * path.)
+     */
+    static char path[MAX_PATH * 2] = {0};
+    unsigned int len = GetSystemDirectory(path, MAX_PATH);
+    if (len == 0 || len > MAX_PATH) return NULL;
+
+    strcat(path, "\\");
+    strcat(path, libname);
+    HMODULE ret = LoadLibrary(path);
+    return ret;
+}
 
 void
 print_buf(int level, byte *buf, int numbytes)
@@ -109,7 +158,35 @@ send_request_to_pageant(byte *inbuf, int inbytes, byte *outbuf, int outbuflen)
     char mapname[512];
     sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
 
-    HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, 
+    PSECURITY_ATTRIBUTES psa = NULL;
+#ifndef NO_SECURITY
+    SECURITY_ATTRIBUTES sa = {0};
+    if (advapi_initialised || init_advapi()) {
+        /*
+         * Set the security info for the file mapping to the same as Pageant's
+         * process, to make sure Pageant's SID check will pass.
+         */
+
+        DWORD dwProcId = 0;
+        GetWindowThreadProcessId(hwnd, &dwProcId);
+        HANDLE proc = OpenProcess(MAXIMUM_ALLOWED, FALSE, dwProcId);
+        if (proc != NULL) {
+			sa.nLength = sizeof(sa);
+			sa.bInheritHandle = TRUE;
+			sa.lpSecurityDescriptor = NULL;
+			GetSecurityInfo(proc, SE_KERNEL_OBJECT, OWNER_SECURITY_INFORMATION,
+					NULL, NULL, NULL, NULL, (PSECURITY_DESCRIPTOR*)&sa.lpSecurityDescriptor);
+			if (sa.lpSecurityDescriptor) {
+				psa = &sa;
+			}
+        }
+		CloseHandle(proc);
+    } else {
+        EPRINTF(0, "Couldn't initialize advapi.\n");
+    }
+#endif /* NO_SECURITY */
+
+    HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, psa, 
                                        PAGE_READWRITE, 0, 
                                        AGENT_MAX_MSGLEN, mapname);
     if (filemap == NULL || filemap == INVALID_HANDLE_VALUE) {
@@ -147,6 +224,10 @@ send_request_to_pageant(byte *inbuf, int inbytes, byte *outbuf, int outbuflen)
 
     UnmapViewOfFile(shmem);
     CloseHandle(filemap);
+#ifndef NO_SECURITY
+    if (sa.lpSecurityDescriptor)
+        LocalFree(sa.lpSecurityDescriptor);
+#endif
 
     EPRINTF(3, "Got %d bytes back from pageant.\n", retlen);
 

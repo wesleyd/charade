@@ -44,6 +44,35 @@
 
 #define GET_32BIT(cp) GET_32BIT_MSB_FIRST(cp)
 
+/*
+ * Dynamically linked functions. These come in two flavours:
+ *
+ *  - GET_WINDOWS_FUNCTION does not expose "name" to the preprocessor,
+ *    so will always dynamically link against exactly what is specified
+ *    in "name". If you're not sure, use this one.
+ *
+ *  - GET_WINDOWS_FUNCTION_PP allows "name" to be redirected via
+ *    preprocessor definitions like "#define foo bar"; this is principally
+ *    intended for the ANSI/Unicode DoSomething/DoSomethingA/DoSomethingW.
+ *    If your function has an argument of type "LPTSTR" or similar, this
+ *    is the variant to use.
+ *    (However, it can't always be used, as it trips over more complicated
+ *    macro trickery such as the WspiapiGetAddrInfo wrapper for getaddrinfo.)
+ *
+ * (DECL_WINDOWS_FUNCTION works with both these variants.)
+ */
+#define DECL_WINDOWS_FUNCTION(linkage, rettype, name, params) \
+    typedef rettype (WINAPI *t_##name) params; \
+    linkage t_##name p_##name
+#define STR1(x) #x
+#define STR(x) STR1(x)
+#define GET_WINDOWS_FUNCTION_PP(module, name) \
+    (p_##name = module ? (t_##name) GetProcAddress(module, STR(name)) : NULL)
+#define GET_WINDOWS_FUNCTION(module, name) \
+    (p_##name = module ? (t_##name) GetProcAddress(module, #name) : NULL)
+
+HMODULE load_system32_dll(const char *libname);
+
 // Send a numbytes-sized message to pageant, synchronously.
 // Up to outbuflen bytes of response will be written into outbuf.
 // If the returned message would overflow buf, or if any other 

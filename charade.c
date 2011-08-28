@@ -135,8 +135,14 @@ create_socket(void)
 
     remove_socket_at_exit = 1;
 
-    int ret = snprintf(socket_name, sizeof(socket_name), 
+    int ret;
+    if (g_socket_name) {
+        ret = snprintf(socket_name, sizeof(socket_name), 
+                       "%s", g_socket_name);
+    } else {
+        ret = snprintf(socket_name, sizeof(socket_name), 
                        "%s/agent.%ld", socket_dir, (long)getpid());
+    }
     if (ret >= sizeof(socket_name)) {
         // Would have liked to print more...
         EPRINTF(0, "socket_name too long (%d >= %d).\n", 

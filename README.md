@@ -32,7 +32,7 @@ Installation instructions
 
 1. Clone the repository
 
-        git clone git://github.com/wesleyd/charade.git
+        git clone https://github.com/wesleyd/charade.git
 
 2. Build and install charade
     

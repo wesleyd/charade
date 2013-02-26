@@ -10,7 +10,7 @@ It aspires to be a drop-in replacement for ssh-agent, and that's how I use it at
 HOMEPAGE="https://github.com/wesleyd/charade"
 
 GIT_URI="git://github.com/wesleyd/charade.git"
-PATCH_URI="charade-${PV}-update_alternatives.patch"
+#GIT_TAG="0.0.2"
 
 # Build dependencies only
 DEPEND="gcc-g++ make git"

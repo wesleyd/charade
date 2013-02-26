@@ -1,0 +1,18 @@
+diff --git a/charade_update_alternatives.sh b/charade_update_alternatives.sh
+new file mode 100644
+index 0000000..73369cb
+--- /dev/null
++++ charade_update_alternatives.sh
+@@ -0,0 +1,12 @@
++#!/bin/bash
++
++set -e
++
++if [ -f /usr/bin/ssh-agent.exe ]; then
++	echo "Moving old ssh-agent.exe"
++	mv -v /usr/bin/ssh-agent.exe /usr/bin/openssh-agent.exe
++	/usr/sbin/alternatives.exe --install /usr/bin/ssh-agent ssh-agent /usr/bin/openssh-agent.exe 100
++fi;
++
++/usr/sbin/alternatives.exe --install /usr/bin/ssh-agent ssh-agent /usr/bin/charade.exe 80 
++/usr/sbin/alternatives.exe --set ssh-agent  /usr/bin/charade.exe

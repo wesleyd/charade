@@ -1,0 +1,36 @@
+NAME="charade"
+VERSION=0.0.2
+RELEASE=1
+CATEGORY="Net"
+SUMMARY="Ssh-agent clone for cygwin that proxies to pageant."
+DESCRIPTION="Charade just pretends to be ssh-agent on one side and putty on the other. It's a shim between openssh and pageant.
+
+It aspires to be a drop-in replacement for ssh-agent, and that's how I use it atm. It works for me. It probably won't work for you."
+
+HOMEPAGE="https://github.com/wesleyd/charade"
+
+GIT_URI="git://github.com/wesleyd/charade.git"
+PATCH_URI="charade-${PV}-update_alternatives.patch"
+
+# Build dependencies only
+DEPEND="gcc-g++ make git"
+# runtime deps to go in setup.hint, and note the escaped newline
+REQUIRES="keychain openssh psmisc"
+
+
+inherit git
+
+# We use the standard src_compile and src_test.
+
+src_compile() {
+	cd ${S}
+	lndirs
+	cd ${B}
+	make	
+}
+src_install() {
+	cd ${B}
+	dobin charade.exe
+	insinto /etc/postinstall
+	doins ${S}/charade_update_alternatives.sh
+}

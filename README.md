@@ -52,7 +52,7 @@ Installation instructions
 
          keychain -q -Q
 
-         . .keychain/`hostname`-sh
+         . ~/.keychain/`hostname`-sh
 
 6. Logout, launch a new shell or putty and try it out
     

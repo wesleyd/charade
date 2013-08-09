@@ -145,7 +145,7 @@ create_socket(void)
     }
     if (ret >= sizeof(socket_name)) {
         // Would have liked to print more...
-        EPRINTF(0, "socket_name too long (%d >= %d).\n", 
+        EPRINTF(0, "socket_name too long (%d >= %zu).\n", 
                 ret, sizeof(socket_name));
         exit(1);
     }
@@ -441,7 +441,7 @@ read_data_for_node(struct socklist_node_t *np)
             if (numbytes < sizeof(buf)) {
                 data_still_to_be_read = 0;
             } else if (numbytes > sizeof(buf)) {
-                EPRINTF(0, "Aiee! Got more bytes than buffer! (%d>%d)\n",
+                EPRINTF(0, "Aiee! Got more bytes than buffer! (%zu>%zu)\n",
                         numbytes, sizeof(buf));
                 return -1;
             } else {  // numbytes == sizeof(buf)
@@ -478,7 +478,7 @@ socket_contains_full_message(struct socklist_node_t *np)
     // bytes of the length itself.
     if (np->len < claimed_numbytes + 4) {
         EPRINTF(4, "short read? first four bytes imply %d bytes (%d+4=%d), "
-                " but we only have %d bytes.\n", 
+                " but we only have %zu bytes.\n", 
                 claimed_numbytes+4, claimed_numbytes,
                 claimed_numbytes+4, np->len);
         return 0;
@@ -548,7 +548,7 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                                                      outbuf, sizeof outbuf);
                 if (retlen <= 0) {
                     // Error sending message to pageant...
-                    EPRINTF(0, "Error sending %d-byte message to pageant.\n",
+                    EPRINTF(0, "Error sending %zu-byte message to pageant.\n",
                             np->len);
                     close(fd);
                     fd_is_closed(fd);
@@ -564,13 +564,13 @@ deal_with_ready_fds(struct pollfd *fds, int nfds)
                 ssize_t byteswritten = write(fd, outbuf, retlen);
                 if (byteswritten != retlen) {
                     EPRINTF(0, "Tried to write %d bytes back to ssh client, "
-                               "ended up writing %d (errno is %d).\n",
+                               "ended up writing %zu (errno is %d).\n",
                             retlen, byteswritten, errno);
                     close(fd);
                     fd_is_closed(fd);
                 }
             } else {
-                EPRINTF(5, "Socket %d has %d bytes, but not a full message.\n",
+                EPRINTF(5, "Socket %d has %zu bytes, but not a full message.\n",
                         np->fd, np->len);
             }
         } else {
@@ -622,7 +622,7 @@ redirect(FILE *f, char *basename)
     int ret = snprintf(buf, sizeof(buf), "%s/%s.%ld", 
                        socket_dir, basename, (long)getpid());
     if (ret >= sizeof(buf)) {
-        EPRINTF(0, "Can't open %s to redirect %s: Too long (%d >= %d).\n", 
+        EPRINTF(0, "Can't open %s to redirect %s: Too long (%d >= %zu).\n", 
                 buf, basename, ret, sizeof(buf));
     } else {
         EPRINTF(1, "Redirecting %s to %s.\n", basename, buf);

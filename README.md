@@ -16,11 +16,12 @@ I stole large swaths of code from (i) Simon Tatham's putty (mostly [putty-src/wi
 
 Also check out [cuviper's ssh-pageant](http://github.com/cuviper/ssh-pageant), which does something similar.
 
-Russell Davis has a clever way of [setting environment variables at boot](http://russelldavis.blogspot.com/2011/02/using-charade-to-proxy-cygwin-ssh-agent.html) so that processes launched outside your shells can also use your ssh keys.
+Russell Davis has a clever way of [setting environment variables at boot](https://russelldavis.blogspot.com/2011/02/using-charade-to-proxy-cygwin-ssh-agent.html) so that processes launched outside your shells can also use your ssh keys.
 
 Required cygwin packages
 ------------------------
 * `gcc-g++`
+* `perl`
 * `make`
 * `keychain`
 * `openssh`
